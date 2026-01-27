@@ -24,9 +24,22 @@ fetch('/api/virtual-cards', {
 ## Demonstrations
 This vulnerability is present in six different functions within app.py. Steps for exploitation and verification of hardening are as follows.
 
-### check_balance_hardened()
+### check_balance()
 Grants attacker access to any user's balance.
+
 #### Exploit
+```mermaid
+sequenceDiagram
+    participant A as Attacker browser
+    participant S as Flask app (/check_balance/<acct>)
+    participant DB as DB
+    A->>S: GET /check_balance/<victim_acct> + JWT
+    S->>S: token_required validates JWT (any user)
+    S->>DB: SELECT username,balance WHERE account_number='<victim>'
+    DB-->>S: username, balance
+    S-->>A: 200 {username,balance,account_number}
+    note over S,DB: No ownership check → BOLA
+```
 1. Log in as any user and note their <account_number> (visible directly below their account balance).
 ![alt text](./screenshots/image-2.png)
 2. Log out, then log in as any other user.
@@ -46,6 +59,23 @@ From here, this may be exploited in one of two ways:
 ![alt text](./screenshots/image.png)
 
 #### Mitigate
+
+```mermaid
+sequenceDiagram
+    participant A as Attacker browser
+    participant S as Flask app (/check_balance/<acct>)
+    participant DB as DB
+    A->>S: GET /check_balance/<victim_acct> + JWT
+    S->>S: token_required validates JWT (any user)
+    S->>DB: SELECT username,balance WHERE account_number=? AND id=current_user
+    DB-->>S: match → row or none
+    alt owner match
+        S-->>A: 200 {username,balance,account_number}
+    else no match
+        S-->>A: 403 error
+    end
+```
+
 Return to root URL (Vulnerable Bank homepage) and click Toggle Mitigation button. Repeat attack (either sequence of steps above) and observe outcome:
 ![alt text](./screenshots/image-1.png)
 
