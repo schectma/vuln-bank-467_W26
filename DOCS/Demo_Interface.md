@@ -83,6 +83,18 @@ After changing `.env`:
 2. Or restart Flask: Stop server (Ctrl+C) and run `python app.py`
 3. Refresh the demo page to see updated states
 
+### Using the Global Toggle
+
+For quick demonstrations without restarting the application:
+
+1. Navigate to the home page at `http://localhost:5000`
+2. Click the yellow **"Toggle Vulnerabilities"** link in the header
+3. An alert will show "Hardened mode: ON" or "Hardened mode: OFF"
+4. Refresh the `/demo` page to see all protections switch to green (ON) or return to individual states (OFF)
+5. Refresh the dashboard to see the badge indicators update
+
+**Note:** This is a runtime toggle that overrides `.env` settings temporarily without requiring an application restart. It resets when the application is restarted.
+
 ### Demonstration Workflow
 
 **For Security Presentations:**
@@ -96,12 +108,6 @@ After changing `.env`:
 7. Refresh demo page to show green card
 8. Repeat for next vulnerability
 
-**For Automated Testing:**
-
-The demo interface reflects the same configuration used by the application, so:
-- Automated tests can verify protection states via `/api/security-config`
-- CI/CD pipelines can toggle vulnerabilities for different test scenarios
-- QA teams can quickly identify which protections are active
 
 ## API Endpoint
 
@@ -144,4 +150,3 @@ Response:
 - Real-time status updates on page refresh
 - Color-coded visual indicators
 - No authentication required (educational tool)
-- Links to detailed vulnerability documentation

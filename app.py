@@ -578,8 +578,8 @@ def dashboard(current_user):
                          account_number=user[3],
                          loans=loans,
                          is_admin=current_user.get('is_admin', False),
-                         xss_protection_enabled=XSS_PROTECTION_ENABLED,
-                         security_hardening_enabled=SECURITY_HARDENING_ENABLED)
+                         xss_protection_enabled=harden or XSS_PROTECTION_ENABLED,
+                         security_hardening_enabled=harden or SECURITY_HARDENING_ENABLED)
 
 # Check balance endpoint
 @app.route('/check_balance/<account_number>')
@@ -2394,7 +2394,24 @@ def security_config():
     """
     Endpoint that returns the current state of all vulnerability toggles.
     Used by the demo interface to display which protections are enabled/disabled.
+    Respects the global 'harden' toggle - when enabled, all protections are shown as active.
     """
+    # If global harden toggle is enabled, all protections are active
+    if harden:
+        return jsonify({
+            'xss_protection_enabled': True,
+            'security_hardening_enabled': True,
+            'sql_injection_protection': True,
+            'authorization_enabled': True,
+            'information_disclosure_protection': True,
+            'mass_assignment_protection': True,
+            'ssrf_protection': True,
+            'password_hashing_enabled': True,
+            'file_upload_validation': True,
+            'ai_prompt_injection_protection': True
+        })
+
+    # Otherwise, return the individual environment variable states
     return jsonify({
         'xss_protection_enabled': XSS_PROTECTION_ENABLED,
         'security_hardening_enabled': SECURITY_HARDENING_ENABLED,
