@@ -19,8 +19,9 @@ from collections import defaultdict
 import requests
 from urllib.parse import urlparse
 import platform
-from mitigations import BOLA
+from mitigations import BOLA, MA
 from mitigations import sql_injections
+from mitigations import session_exp
 
 # Load environment variables
 load_dotenv()
@@ -355,17 +356,31 @@ def register():
                     'username': user_data.get('username'),
                     'tried_at': str(datetime.now())  # Information disclosure
                 }), 400
-            
+
+            if harden:
+                # HARDENED: registration field whitelist
+                ALLOWED_REGISTRATION_FIELDS = ['username', 'password']
+
             # Build dynamic query based on user input fields
             # Vulnerability: Mass Assignment possible here
             fields = ['username', 'password', 'account_number']
             values = [user_data.get('username'), user_data.get('password'), account_number]
             
-            # Include any additional parameters from user input
-            for key, value in user_data.items():
-                if key not in ['username', 'password']:
-                    fields.append(key)
-                    values.append(value)
+            if harden:
+                # HARDEN: validate input against whitelist
+                for key in user_data.keys():
+                    if key not in ALLOWED_REGISTRATION_FIELDS:
+                        return jsonify({
+                            'status': 'error',
+                            'message': f'Invalid field: {key}. Only username and password are allowed.',
+                            'allowed_fields': ALLOWED_REGISTRATION_FIELDS
+                        }), 400
+            else:
+                # Include any additional parameters from user input
+                for key, value in user_data.items():
+                    if key not in ['username', 'password']:
+                        fields.append(key)
+                        values.append(value)
             
             # Build the SQL query dynamically
             query = f"""
@@ -1663,16 +1678,21 @@ def api_transactions(current_user):
     if not account_number:
         return jsonify({'error': 'Account number required'}), 400
         
-    # Vulnerability: SQL Injection
-    query = f"""
-        SELECT * FROM transactions 
-        WHERE from_account='{account_number}' OR to_account='{account_number}'
-        ORDER BY timestamp DESC
-    """
-    
+    if harden:
+        query = sql_injections.api_transactions_hardened()
+        params = (account_number, account_number)
+    else:
+        # Vulnerability: SQL Injection
+        query = f"""
+            SELECT * FROM transactions
+            WHERE from_account='{account_number}' OR to_account='{account_number}'
+            ORDER BY timestamp DESC
+        """
+        params = ()
+
     try:
-        transactions = execute_query(query)
-        
+        transactions = execute_query(query, params)
+
         # Convert Decimal objects to float for JSON serialization
         transaction_list = []
         for t in transactions:
@@ -1712,16 +1732,29 @@ def create_virtual_card(current_user):
         # Vulnerability: SQL injection possible in card_type
         card_type = data.get('card_type', 'standard')
         
+        if harden:
+            query = sql_injections.create_virtual_card_hardened()
+            params = (
+                current_user['user_id'],
+                card_number,
+                cvv,
+                expiry_date,
+                card_limit,
+                card_type
+            )
+            result = execute_query(query, params)
+
+        else:
         # Create virtual card
-        query = f"""
-            INSERT INTO virtual_cards 
-            (user_id, card_number, cvv, expiry_date, card_limit, card_type)
-            VALUES 
-            ({current_user['user_id']}, '{card_number}', '{cvv}', '{expiry_date}', {card_limit}, '{card_type}')
-            RETURNING id
-        """
-        
-        result = execute_query(query)
+            query = f"""
+                INSERT INTO virtual_cards
+                (user_id, card_number, cvv, expiry_date, card_limit, card_type)
+                VALUES
+                ({current_user['user_id']}, '{card_number}', '{cvv}', '{expiry_date}', {card_limit}, '{card_type}')
+                RETURNING id
+            """
+            params = ()
+            result = execute_query(query)
         
         if result:
             # Vulnerability: Sensitive data exposure
@@ -1883,7 +1916,16 @@ def update_card_limit(current_user, card_id):
         update_fields = []
         update_values = []
         updated_fields_list = []  # Store field names in a regular list
-        
+
+        if harden:
+            try:
+                MA.update_card_limit_hardened(data or {}, ['card_limit'])
+            except ValueError as ve:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Illegal payload'
+                }), 403
+    
         # Iterate through all fields sent in request
         # Vulnerability: No whitelist of allowed fields
         # This allows updating any column including balance
@@ -1965,15 +2007,20 @@ def get_bill_categories():
         }), 500
 
 @app.route('/api/billers/by-category/<int:category_id>', methods=['GET'])
+#@app.route('/api/billers/by-category/<category_id>', methods=['GET']) # Only for testing purposes
 def get_billers_by_category(category_id):
     try:
-        # Vulnerability: SQL injection possible
-        query = f"""
-            SELECT * FROM billers 
-            WHERE category_id = {category_id} 
-            AND is_active = TRUE
-        """
-        billers = execute_query(query)
+        if harden:
+            query = sql_injections.get_billers_by_category_hardened()
+            billers = execute_query(query, (category_id,))
+        else:
+            # Vulnerability: SQL injection possible
+            query = f"""
+                SELECT * FROM billers
+                WHERE category_id = {category_id}
+                AND is_active = TRUE
+            """
+            billers = execute_query(query)
         
         # Vulnerability: Information disclosure
         return jsonify({
@@ -2115,22 +2162,26 @@ def create_bill_payment(current_user):
 def get_payment_history(current_user):
     try:
         # Vulnerability: No pagination
-        # Vulnerability: SQL injection possible
-        query = f"""
-            SELECT 
-                bp.*,
-                b.name as biller_name,
-                bc.name as category_name,
-                vc.card_number
-            FROM bill_payments bp
-            JOIN billers b ON bp.biller_id = b.id
-            JOIN bill_categories bc ON b.category_id = bc.id
-            LEFT JOIN virtual_cards vc ON bp.card_id = vc.id
-            WHERE bp.user_id = {current_user['user_id']}
-            ORDER BY bp.created_at DESC
-        """
+        if harden:
+            query = sql_injections.get_payment_history_hardened()
+            payments = execute_query(query, (current_user['user_id'],))
+        else:
+            # Vulnerability: SQL injection possible
+            query = f"""
+                SELECT
+                    bp.*,
+                    b.name as biller_name,
+                    bc.name as category_name,
+                    vc.card_number
+                FROM bill_payments bp
+                JOIN billers b ON bp.biller_id = b.id
+                JOIN bill_categories bc ON b.category_id = bc.id
+                LEFT JOIN virtual_cards vc ON bp.card_id = vc.id
+                WHERE bp.user_id = {current_user['user_id']}
+                ORDER BY bp.created_at DESC
+            """
         
-        payments = execute_query(query)
+            payments = execute_query(query)
         
         # Vulnerability: Excessive data exposure
         return jsonify({
