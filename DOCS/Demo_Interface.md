@@ -10,7 +10,7 @@ The demo interface provides a **live status monitoring dashboard** that displays
 - Application running with Docker or local Flask server
 - At least one registered user account
 ## Accessing the Demo Interface
-
+Log in to any user account
 Navigate to: `http://localhost:5000/demo`
 
 No authentication required - the demo panel is publicly accessible for educational purposes.
