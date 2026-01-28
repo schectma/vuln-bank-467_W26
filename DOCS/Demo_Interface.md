@@ -1,6 +1,8 @@
-# Demo Interface and Vulnerability Toggle System
+# Demo Interface - Vulnerability Status Dashboard
 
-The demo interface provides a centralized control panel for viewing and understanding all vulnerability toggles in the Vulnerable Bank application. It serves as an educational tool for security demonstrations and testing.
+The demo interface provides a **live status monitoring dashboard** that displays the current state of all vulnerability toggles in the Vulnerable Bank application. This is a presentation tool that complements the comprehensive documentation in the markdown files.
+
+**Note:** This dashboard displays status only. For detailed testing instructions, exploit scenarios, and mitigation steps, see the individual vulnerability documentation files: `XSS.md`, `BOLA.md`, `Security_Misconfiguration.md`, etc.
 
 ## Prerequisites
 
@@ -19,23 +21,20 @@ No authentication required - the demo panel is publicly accessible for education
 
 The demo interface displays the current state of all 10 vulnerability toggles:
 
-1. **Cross-Site Scripting (XSS)** - CWE-79
-2. **Security Misconfiguration** - CWE-16
-3. **SQL Injection** - CWE-89
-4. **Broken Authorization (BOLA)** - CWE-285
-5. **Information Disclosure** - CWE-200
-6. **Mass Assignment** - CWE-915
-7. **Server-Side Request Forgery (SSRF)** - CWE-918
-8. **Weak Password Hashing** - CWE-256/522
-9. **File Upload Vulnerabilities** - CWE-434
-10. **AI Prompt Injection** - CWE-94
+1. **Cross-Site Scripting (XSS)**
+2. **Security Misconfiguration**
+3. **SQL Injection**
+4. **Broken Authorization (BOLA)**
+5. **Information Disclosure**
+6. **Mass Assignment**
+7. **Server-Side Request Forgery (SSRF)**
+8. **Weak Password Hashing**
+9. **File Upload Vulnerabilities**
+10. **AI Prompt Injection**
 
-Each vulnerability shows:
+Each vulnerability card displays:
 - **VULNERABLE** (red) or **PROTECTED** (green) status
-- Associated CWE identifier
-- Brief description
-- Test scenario instructions
-- Link to detailed documentation
+- Vulnerability name
 
 ### Summary Statistics
 
@@ -48,14 +47,7 @@ Top banner displays:
 
 - **Red cards**: Vulnerability is currently enabled (protection disabled)
 - **Green cards**: Protection is currently enabled (vulnerability mitigated)
-
-### Test Scenarios
-
-Each vulnerability card includes:
-- Step-by-step exploitation instructions
-- Expected results for vulnerable state
-- Expected results for protected state
-- Links to detailed testing documentation
+- **Documentation Links**: Each card links to the detailed markdown documentation for that vulnerability
 
 ## Usage
 
@@ -68,11 +60,11 @@ Each vulnerability card includes:
 
 ### Testing a Vulnerability
 
-1. Locate the vulnerability card you want to test
+1. Locate the vulnerability card you want to test on the dashboard
 2. Note its current state (VULNERABLE or PROTECTED)
-3. Read the "Test Scenario" section
-4. Follow the instructions to exploit or verify protection
-5. See detailed documentation by clicking vulnerability-specific docs
+3. Click the documentation link on the card (e.g., "DOCS/XSS.md")
+4. Follow the detailed testing instructions in the markdown documentation file
+5. Return to the dashboard to verify status changes after toggling protections
 
 ### Toggling Protections
 
