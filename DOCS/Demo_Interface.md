@@ -66,7 +66,7 @@ Top banner displays:
 4. Follow the detailed testing instructions in the markdown documentation file
 5. Return to the dashboard to verify status changes after toggling protections
 
-### Toggling Protections
+### Toggling Protections (for Development)
 
 Vulnerability states are controlled via environment variables in `.env`:
 
