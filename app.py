@@ -334,17 +334,6 @@ def generate_cvv():
 def index():
     return render_template('index.html')
 
-@app.route('/demo')
-@token_required
-def demo(current_user):
-    """
-    Security demonstration control panel.
-    Displays all vulnerability toggles and their current states.
-    Provides test scenarios and instructions for each vulnerability.
-    Requires authentication to access.
-    """
-    return render_template('demo.html')
-
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
