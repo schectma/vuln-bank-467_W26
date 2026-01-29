@@ -22,7 +22,7 @@ Allows injection of malicious scripts through transaction descriptions.
 
 1. Confirm the app is in **Vulnerable** mode (Toggle Mitigation should indicate protections are off)
 2. Log in to your account
-3. Navigate to "Send Money" section in the dashboard
+3. Navigate to "Money Transfer" section in the dashboard
 4. Fill in the transfer form:
    - **Recipient Account Number**: Enter any valid account number (e.g., `ACC1002` for another test user)
    - **Amount**: Enter any amount (e.g., `10.00`)
