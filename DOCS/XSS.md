@@ -10,7 +10,7 @@ XSS allows attackers to inject malicious scripts into web pages viewed by other 
 
 ## Toggle Setup
 
-Use the global **Toggle Mitigation** button on the app's homepage to switch between Vulnerable (protections off) and Hardened (protections on) states. For the exploit steps, ensure the toggle is set to **Vulnerable**. For mitigation verification, set it to **Hardened**—no env changes or restarts needed.
+Use the global **Toggle Vulnerabilities** button on the app's homepage to switch between Vulnerable (protections off) and Hardened (protections on) states. For the exploit steps, ensure the toggle is set to **Vulnerable**. For mitigation verification, set it to **Hardened**—no env changes or restarts needed.
 
 ## Demonstrations
 
