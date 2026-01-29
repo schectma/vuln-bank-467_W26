@@ -8,13 +8,9 @@ XSS allows attackers to inject malicious scripts into web pages viewed by other 
 - One registered user account
 - Access to browser developer console
 
-## Configuration
+## Toggle Setup
 
-Set the following in your `.env` file:
-
-```
-XSS_PROTECTION_ENABLED=false  # Vulnerable state
-```
+Use the global **Toggle Mitigation** button on the app's homepage to switch between Vulnerable (protections off) and Hardened (protections on) states. For the exploit steps, ensure the toggle is set to **Vulnerable**. For mitigation verification, set it to **Hardened**—no env changes or restarts needed.
 
 ## Demonstrations
 
@@ -24,18 +20,19 @@ Allows injection of malicious scripts through transaction descriptions.
 
 #### Exploit
 
-1. Log in to your account
-2. Navigate to "Send Money" section in the dashboard
-3. Fill in the transfer form:
+1. Confirm the app is in **Vulnerable** mode (Toggle Mitigation should indicate protections are off)
+2. Log in to your account
+3. Navigate to "Send Money" section in the dashboard
+4. Fill in the transfer form:
    - **Recipient Account Number**: Enter any valid account number (e.g., `ACC1002` for another test user)
    - **Amount**: Enter any amount (e.g., `10.00`)
    - **Description**: Enter the following XSS payload:
      ```
      <img src=x onerror="alert('XSS Vulnerability!')">
      ```
-4. Click "Transfer" button to submit the transaction
-5. Navigate to "Transaction History" section on your dashboard
-6. Observe the alert popup appears immediately when the page renders
+5. Click "Transfer" button to submit the transaction
+6. Navigate to "Transaction History" section on your dashboard
+7. Observe the alert popup appears immediately when the page renders
 
 **Expected Result (Vulnerable):** Alert popup displays "XSS Vulnerability!" demonstrating arbitrary JavaScript execution. The script executes every time the transaction history is viewed.
 
@@ -45,20 +42,7 @@ Allows injection of malicious scripts through transaction descriptions.
 ```
 (Note: This will fail in a real scenario but demonstrates the attack vector)
 
-#### Mitigate
-
-1. Stop the application (Ctrl+C if running locally, or `docker-compose down` if using Docker)
-2. Edit the `.env` file and update:
-   ```
-   XSS_PROTECTION_ENABLED=true
-   ```
-3. Restart the application:
-   - Docker: `docker-compose up`
-   - Local: `python app.py`
-4. Repeat the exploit steps above (create a new transaction with the XSS payload)
-5. Navigate to Transaction History
-
-**Expected Result (Protected):** The payload is rendered as plain text: `<img src=x onerror="alert('XSS Vulnerability!')">` with no script execution. The HTML is escaped and displayed literally.
+**Protected Behavior (Mitigation On):** With **Toggle Mitigation** set to Hardened, the payload is rendered as plain text: `<img src=x onerror="alert('XSS Vulnerability!')">` with no script execution. The HTML is escaped and displayed literally.
 
 ### Bill Payment XSS
 
@@ -81,33 +65,29 @@ Allows injection through bill payment categories and biller names. This demonstr
 
 ##### Method 2: Via Payment Description (User Input)
 
-1. Log in and navigate to "Bill Payments" section
-2. Click "Pay Bill" button
-3. Select any category (e.g., "Utilities") and biller (e.g., "Electric Company")
-4. Fill in payment details:
+1. Confirm the app is in **Vulnerable** mode (Toggle Mitigation should indicate protections are off)
+2. Log in and navigate to "Bill Payments" section
+3. Click "Pay Bill" button
+4. Select any category (e.g., "Utilities") and biller (e.g., "Electric Company")
+5. Fill in payment details:
    - **Amount**: Enter any amount (e.g., `50.00`)
    - **Payment Method**: Select "Account Balance" or "Virtual Card"
    - **Description**: Enter the following payload:
      ```
      <img src=x onerror="console.log('XSS in payment:',document.cookie)">
      ```
-5. Submit the payment
-6. Navigate to "Bill Payments" section and view payment history
-7. Open browser console (F12 → Console tab)
-8. Observe the XSS payload executes and logs session cookies
+6. Submit the payment
+7. Navigate to "Bill Payments" section and view payment history
+8. Open browser console (F12 → Console tab)
+9. Observe the XSS payload executes and logs session cookies
 
 **Expected Result (Vulnerable):** Browser console displays session cookies with message "XSS in payment:" followed by the cookie data including JWT token.
 
 #### Mitigate
 
-1. Stop the application
-2. Edit the `.env` file and update:
-   ```
-   XSS_PROTECTION_ENABLED=true
-   ```
-3. Restart the application
-4. Repeat exploit steps (create a new payment with XSS payload in description)
-5. View payment history and check browser console
+1. Return to the homepage and click **Toggle Mitigation** to switch to **Hardened** mode (protections on)
+2. Repeat exploit steps (create a new payment with XSS payload in description)
+3. View payment history and check browser console
 
 **Expected Result (Protected):** HTML is escaped and displayed as plain text. Browser console shows no XSS execution. The payload appears as literal text: `<img src=x onerror="console.log('XSS in payment:',document.cookie)">`
 

