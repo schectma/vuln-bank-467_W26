@@ -30,7 +30,7 @@ Allows injection of malicious scripts through transaction descriptions.
      ```
      <img src=x onerror="alert('XSS Vulnerability!')">
      ```
-5. Click "Transfer" button to submit the transaction
+5. Click "Send Money" button to submit the transaction
 6. Navigate to "Transaction History" section on your dashboard
 7. Observe the alert popup appears immediately when the page renders
 
