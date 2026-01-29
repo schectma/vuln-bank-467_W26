@@ -288,7 +288,7 @@ Exposes detailed error messages and debug endpoints with sensitive information.
 
 ##### Method 2: Triggering Detailed Error Messages
 
-1. Login to the application at `http://localhost:5000/dashboard`
+Log in as any user.
 2. Open browser console (F12 → Console)
 3. Execute an intentionally malformed API request:
    ```javascript
