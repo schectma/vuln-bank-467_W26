@@ -86,7 +86,7 @@ Allows attackers to forge session tokens and JWT tokens using easily guessable s
    ```
 8. Observe the "Signature Verified" message appears
 
-**Expected Result (Vulnerable):** JWT signature verifies successfully with the weak secret `secret123`. An attacker can now:
+Expected Result (Vulnerable):** JWT signature verifies successfully with the weak secret `secret123`. Using tools and methods beyond the scope of this specific demonstration method, an attacker can now:
 - Modify the payload (e.g., change `user_id`, `is_admin`)
 - Generate a new valid signature using `secret123`
 - Forge tokens to impersonate any user
