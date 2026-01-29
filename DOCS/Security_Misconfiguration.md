@@ -151,7 +151,7 @@ Exposes application to clickjacking, MIME-type sniffing, and other attacks.
 
 **Option 1: Using Runtime Toggle (Recommended)**
 1. Go to `http://localhost:5000/dashboard`
-2. Click "Enable Security Hardening" toggle
+Click "Toggle Vulnerabilities" at top of page
 3. Open DevTools (F12) → Network tab
 4. Refresh the page
 5. Click on the main document request (usually the first one, named `dashboard`)
