@@ -10,12 +10,19 @@ services:
 
     environment:
       - DB_NAME=vulnerable_bank
-      - DB_USER=postgres
-      - DB_PASSWORD=postgres
+      - DB_USER=vuln_user
+      - DB_PASSWORD=vulnbank123
       - DB_HOST=db 
       - DB_PORT=5432
+      - AI_BACKEND=ollama
+      - OLLAMA_HOST=http://ollama:11434
+      - OLLAMA_MODEL=deepseek-r1:1.5b
+      - SECURITY_HARDENING_ENABLED=false
+      - FLASK_SECRET_KEY=secret123
+      - JWT_SECRET_KEY=secret123
     depends_on:
       - db
+      - ollama
     volumes:
       - ./static/uploads:/app/static/uploads
     networks:
@@ -25,8 +32,8 @@ services:
     image: postgres:13
     environment:
       - POSTGRES_DB=vulnerable_bank
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_USER=vuln_user
+      - POSTGRES_PASSWORD=vulnbank123
     ports:
       - "5432:5432"
     volumes:
@@ -34,8 +41,21 @@ services:
     networks:
       - vuln_network
 
+  ollama:
+    build:
+      context: .
+      dockerfile: Dockerfile.ollama
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - vuln_network
+
 volumes:
   postgres_data:
+  ollama_data:
 
 networks:
   vuln_network:

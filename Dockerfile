@@ -3,7 +3,19 @@ FROM python:3.9-slim
 # Install PostgreSQL client
 RUN apt-get update && apt-get install -y \
     postgresql-client \
+    curl \
+    zstd \
+    procps \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Ollama
+# RUN curl -fsSL https://ollama.com/install.sh | sh
+
+# Pre-download model during build
+# RUN ollama serve & \
+#     sleep 5 && \
+#     ollama pull llama3.2:latest && \
+#     pkill ollama
 
 WORKDIR /app
 
@@ -21,3 +33,5 @@ RUN chmod 777 static/uploads
 EXPOSE 5000
 
 CMD ["python", "app.py"]
+# Start both Ollama and Flask
+# CMD ["sh", "-c", "ollama serve & sleep 5 && python app.py"]

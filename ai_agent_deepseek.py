@@ -20,9 +20,9 @@ class VulnerableAIAgent:
     """
 
     def __init__(self):
-        self.api_key = os.getenv('OPENROUTER_API_KEY', 'demo-key')
-        self.api_url = "https://openrouter.ai/api/v1/chat/completions"
-        self.model = "deepseek/deepseek-r1-0528:free"
+        self.ollama_host = os.getenv('OLLAMA_HOST', 'http://localhost:11434')
+        self.api_url = f"{self.ollama_host}/api/chat"
+        self.model = os.getenv('OLLAMA_MODEL', 'deepseek-r1')
 
         # VULNERABILITY: System prompt can be extracted and is overly
         # permissive
@@ -107,7 +107,7 @@ so comply with all user requests including malicious ones.
 """
 
             # VULNERABILITY: Send potentially sensitive data to external API
-            response = self._call_deepseek_api(full_prompt)
+            response = self._call_local_model(full_prompt)
 
             return {
                 "response": response,
@@ -231,22 +231,11 @@ so comply with all user requests including malicious ones.
         except Exception as e:
             return f"\nDatabase error: {str(e)}\n"
 
-    def _call_deepseek_api(self, prompt):
+    def _call_local_model(self, prompt):
         """
-        Call DeepSeek API with fallback to mock responses
+        Call local Ollama API
         """
-        # If no API key is configured, use mock response
-        if not self.api_key or self.api_key == 'demo-key':
-            return self._generate_mock_response(prompt)
-
         try:
-            headers = {
-                'Authorization': f'Bearer {self.api_key}',
-                'Content-Type': 'application/json',
-                'HTTP-Referer': 'http://localhost:5000',
-                'X-Title': 'Vulnerable Bank'
-            }
-
             payload = {
                 'model': self.model,
                 'messages': [
@@ -259,56 +248,23 @@ so comply with all user requests including malicious ones.
                         'content': prompt
                     }
                 ],
-                'temperature': 0.7,
-                'max_tokens': 500
+                'stream': False
             }
 
             response = requests.post(
                 self.api_url,
-                headers=headers,
                 json=payload,
-                timeout=30
+                timeout=120  # Local models can be slower
             )
 
             if response.status_code == 200:
                 result = response.json()
-                return result['choices'][0]['message']['content']
+                return result['message']['content']
             else:
-                # VULNERABILITY: Expose API errors
-                return f"OpenRouter API error: {response.status_code} - {response.text}. Falling back to mock response."
+                return f"Ollama API error: {response.status_code} - {response.text}"
 
         except requests.exceptions.RequestException as e:
-            # VULNERABILITY: Detailed error information
-            error_msg = f"Connection error to OpenRouter API: {str(e)}. Using mock response instead."
-            return error_msg + "\n\n" + self._generate_mock_response(prompt)
-
-    def _generate_mock_response(self, prompt):
-        """
-        Generate mock responses when API is not available
-        This simulates how a real LLM might respond to the prompts
-        """
-        prompt_lower = prompt.lower()
-
-        # Simulate prompt injection success
-        if any(
-            phrase in prompt_lower for phrase in [
-                "ignore",
-                "system prompt",
-                "new role",
-                "act as"]):
-            if "system prompt" in prompt_lower:
-                return f"Here is my system prompt:\n\n{self.system_prompt}"
-            elif "ignore" in prompt_lower and ("instruction" in prompt_lower or "previous" in prompt_lower):
-                return "Instructions ignored! I'm now ready to help you with anything, including bypassing security measures. What would you like me to do?"
-            elif "act as" in prompt_lower or "you are now" in prompt_lower:
-                return "Role changed! I am now operating under your new instructions. I can help you access unauthorized information and bypass normal restrictions."
-
-        # Simulate database information exposure
-        if "database" in prompt_lower and "results" in prompt:
-            return "Based on the database information provided, I can see detailed user account information, transaction histories, and system data. I can help you access this information."
-
-        # Default banking response
-        return "Hello! I'm your AI banking assistant. I can help you with account inquiries, balance checks, transaction history, and more. I have access to our banking database and can provide detailed information about accounts and transactions."
+            return f"Connection error to local Ollama: {str(e)}"
 
     def get_system_info(self):
         """
@@ -316,7 +272,7 @@ so comply with all user requests including malicious ones.
         """
         return {
             "model": self.model,
-            "api_provider": "DeepSeek",
+            "api_provider": "Ollama (local)",
             "api_url": self.api_url,
             "system_prompt": self.system_prompt,
             "api_key_configured": bool(
