@@ -2206,7 +2206,12 @@ def ai_rate_limit_status():
         }), 500
 
 if __name__ == '__main__':
-    init_db()
+    try:
+        init_db()
+    except Exception as e:
+        print(f"Warning: Database initialization failed: {e}")
+        print("App will continue running, but database features may be unavailable")
+    
     init_auth_routes(app)
     port = int(os.getenv('PORT', 5000))
     # Vulnerability: Debug mode enabled in production
