@@ -2208,5 +2208,6 @@ def ai_rate_limit_status():
 if __name__ == '__main__':
     init_db()
     init_auth_routes(app)
+    port = int(os.getenv('PORT', 5000))
     # Vulnerability: Debug mode enabled in production
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=port, debug=False)
