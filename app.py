@@ -30,7 +30,11 @@ app = Flask(__name__)
 CORS(app)
 
 # Initialize database connection pool
-init_connection_pool()
+try:
+    init_connection_pool()
+except Exception as e:
+    print(f"Warning: Failed to initialize database connection pool: {e}")
+    print("Database will be initialized on first request")
 
 SWAGGER_URL = '/api/docs'
 API_URL = '/static/openapi.json'
