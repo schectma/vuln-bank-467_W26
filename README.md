@@ -1,3 +1,1 @@
-# Vulnerable Bank Application 🏦
-
-Under construction by the CS467_W26 capstone team.
+Deployed with Railway at vb467w26-production-b2df.up.railway.app
