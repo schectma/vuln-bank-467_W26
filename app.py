@@ -1034,6 +1034,19 @@ def harden_toggle():
         'hardened': harden
     })
 
+@app.route('/api/toggle/hashing', methods=['POST'])
+def hashing_toggle():
+    currentHash = app.config.get("HASHMODE", 0)
+
+    newHash = (currentHash + 1) % 4
+
+    app.config["HASHMODE"] = newHash
+
+    return jsonify({
+        'status': 'success',
+        'hashmode': newHash
+    })
+
 # Forgot password endpoint
 @app.route('/forgot-password', methods=['GET', 'POST'])
 def forgot_password():

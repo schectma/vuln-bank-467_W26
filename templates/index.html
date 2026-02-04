@@ -793,6 +793,12 @@
                         style="color: yellow; text-shadow: -1px -1px 0 black, 1px -1px 0 black, -1px 1px 0 black, 1px 1px 0 black, -1px 0 0 black, 1px 0 0 black, 0 -1px 0 black, 0 1px 0 black;">
                         Toggle Vulnerabilities
                     </a>
+                    <a id="hashingToggle"
+                        href="#"
+                        onclick="toggleHashing(event)"
+                        style="color: yellow; text-shadow: -1px -1px 0 black, 1px -1px 0 black, -1px 1px 0 black, 1px 1px 0 black, -1px 0 0 black, 1px 0 0 black, 0 -1px 0 black, 0 1px 0 black;">
+                        Toggle Hashing
+                    </a>
                     <a href="https://github.com/Commando-X/vuln-bank?tab=readme-ov-file#testing-guide-" target="_blank">Guide</a>
                     <a href="/api/docs"> API Docs</a>
                     <a href="https://github.com/Commando-X/vuln-bank" target="_blank" title="View on GitHub">
@@ -1172,6 +1178,37 @@
                 alert('Error toggling vulnerabilities');
             }
         }       
+    </script>
+
+    <script>
+        // Toggle logic for button
+        let hashMode = null;
+
+        const labels = ["Plaintext", "Weak", "Medium", "Strong"];
+
+        async function toggleHashing(e) {
+            e.preventDefault();
+
+            try {
+                const res = await fetch('/api/toggle/hashing', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+
+                });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    hashMode = data.hashmode;
+                    alert(`Hashing mode: ${labels[hashMode]} (${hashMode})`);
+                } else {
+                    alert(data.message || 'Toggle failed');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Error toggling hashing');
+            }
+        }
     </script>
 
 </body>
