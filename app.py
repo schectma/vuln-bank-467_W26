@@ -54,6 +54,9 @@ harden = False
 
 app.config["HARDENED"] = harden
 
+# Hashing feature flag
+app.config["HASHMODE"] = 0
+
 # Rate limiting configuration
 RATE_LIMIT_WINDOW = 3 * 60 * 60  # 3 hours in seconds
 UNAUTHENTICATED_LIMIT = 5  # requests per IP per window
