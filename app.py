@@ -200,7 +200,6 @@ def index():
     #return render_template('index.html')
     vulnState = app.config.get("HARDENED", False)
     hashState = app.config.get("HASHMODE", 0)
-    #return render_template('index.html', hardened=vulnState)
     return render_template('index.html', hardened=vulnState, hashmode=hashState)
 
 @app.route('/register', methods=['GET', 'POST'])
@@ -1035,8 +1034,7 @@ def harden_toggle():
 
     return jsonify({
         'status': 'success',
-        #'hardened': harden
-        'hardened': app.config.get("HARDENED", False)
+        'hardened': harden
     })
 
 @app.route('/api/toggle/hashing', methods=['POST'])
@@ -1050,7 +1048,6 @@ def hashing_toggle():
     return jsonify({
         'status': 'success',
         'hashmode': newHash
-        #'hashmode': app.config.get("HASHMODE", 0)
     })
 
 # Forgot password endpoint
