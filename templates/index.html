@@ -57,7 +57,6 @@
 
         .hashingToggle {
             color: white !important;
-            background-color: #b30000;
             text-decoration: none;
             padding: 8px 14px;
             border-radius: 999px;
@@ -68,8 +67,6 @@
 
         .vulnToggle {
             color: white !important;
-            /*background-color: #b30000;*/
-            /*background-color: {{ '#1f8b1f' if hardened else '#b30000' }};*/
             text-decoration: none;
             padding: 8px 14px;
             border-radius: 999px;
@@ -827,8 +824,9 @@
                     <a id="hashingToggle"
                         href="#"
                         onclick="toggleHashing(event)"
-                        class="hashingToggle">
-                        Toggle Hashing
+                        class="hashingToggle"
+                        style="background-color: {{ ['#b30000', '#ff8c00', '#e6b800', '#1f8b1f'][hashmode] }};">
+                        Toggle Hashing: {{ ["None", "Weak", "Medium", "Strong"][hashmode] }}
                     </a>
                     <a href="https://github.com/Commando-X/vuln-bank?tab=readme-ov-file#testing-guide-" target="_blank">Guide</a>
                     <a href="/api/docs"> API Docs</a>
@@ -1217,26 +1215,14 @@
                 alert('Error toggling vulnerabilities');
             }
         }
-        //document.addEventListener("DOMContentLoaded", updateVulnUI);
-        //document.addEventListener("DOMContentLoaded", async () => {
-        //    try {
-        //        const res = await fetch('/api/toggle/status');
-        //        const data = await res.json();
 
-                // Update our local variable with the server's truth
-        //        hardened = !!data.hardened;
-        //        updateVulnUI();
-        //    } catch (err) {
-        //        console.error("Initial load failed:", err);
-        //        updateVulnUI(); // Fallback to default UI
-        //        }
-        //});
     </script>
 
     <script>
         // Toggle logic for button
         //let hashMode = null;
-        let hashMode = 0;
+        //let hashMode = 0;
+        let hashMode = {{ hashmode | tojson }};
 
         const colors = ["#b30000", "#ff8c00", "#e6b800", "#1f8b1f"]; //To test colors
         const labels = ["None", "Weak", "Medium", "Strong"];
@@ -1244,6 +1230,7 @@
         //For testing colors
         function updateHashingUI() {
             const btn = document.getElementById("hashingToggle");
+            if (!btn) return;
 
             btn.textContent = `Hashing: ${labels[hashMode]}`;
             btn.style.backgroundColor = colors[hashMode];

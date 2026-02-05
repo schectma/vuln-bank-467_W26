@@ -199,7 +199,9 @@ def generate_cvv():
 def index():
     #return render_template('index.html')
     vulnState = app.config.get("HARDENED", False)
-    return render_template('index.html', hardened=vulnState)
+    hashState = app.config.get("HASHMODE", 0)
+    #return render_template('index.html', hardened=vulnState)
+    return render_template('index.html', hardened=vulnState, hashmode=hashState)
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -1048,6 +1050,7 @@ def hashing_toggle():
     return jsonify({
         'status': 'success',
         'hashmode': newHash
+        #'hashmode': app.config.get("HASHMODE", 0)
     })
 
 # Forgot password endpoint
