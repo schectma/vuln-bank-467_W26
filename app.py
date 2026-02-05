@@ -102,6 +102,36 @@ def check_rate_limit(key, limit):
     rate_limit_storage[key].append((current_time, 1))
     return True, request_count + 1, limit
 
+
+def ip_rate_limit(prefix: str, limit: int):
+    """Rate limiting decorator that uses IP to enforce hardening toggle."""
+    def decorator(f):
+        @wraps(f)
+        def wrapped(*args, **kwargs):
+            if not app.config.get("HARDENED", False):
+                return f(*args, **kwargs)
+            client_ip = get_client_ip()
+            key = f"{prefix}_ip_{client_ip}"
+            allowed, count, lim = check_rate_limit(key, limit)
+
+            if not allowed:
+                return jsonify({
+                    "status": "error",
+                    "message": f"Too many requests. Rate limit: {lim}.",
+                    "rate_limit_info": {
+                        "limit_type": "ip",
+                        "client_ip": client_ip,
+                        "current_count": count,
+                        "limit": lim,
+                        "window_hours": 3
+                    }
+                }), 429
+
+            return f(*args, **kwargs)
+        return wrapped
+    return decorator
+
+
 def ai_rate_limit(f):
     """Rate limiting decorator for AI endpoints"""
     @wraps(f)
@@ -294,6 +324,7 @@ def register():
     return render_template('register.html')
 
 @app.route('/login', methods=['GET', 'POST'])
+@ip_rate_limit(prefix="login", limit=6)
 def login():
     if request.method == 'POST':
         try:
