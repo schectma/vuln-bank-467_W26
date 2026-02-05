@@ -197,7 +197,9 @@ def generate_cvv():
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    #return render_template('index.html')
+    vulnState = app.config.get("HARDENED", False)
+    return render_template('index.html', hardened=vulnState)
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -1031,7 +1033,8 @@ def harden_toggle():
 
     return jsonify({
         'status': 'success',
-        'hardened': harden
+        #'hardened': harden
+        'hardened': app.config.get("HARDENED", False)
     })
 
 @app.route('/api/toggle/hashing', methods=['POST'])

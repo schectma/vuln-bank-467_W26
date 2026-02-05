@@ -57,6 +57,7 @@
 
         .hashingToggle {
             color: white !important;
+            background-color: #b30000;
             text-decoration: none;
             padding: 8px 14px;
             border-radius: 999px;
@@ -67,6 +68,8 @@
 
         .vulnToggle {
             color: white !important;
+            /*background-color: #b30000;*/
+            /*background-color: {{ '#1f8b1f' if hardened else '#b30000' }};*/
             text-decoration: none;
             padding: 8px 14px;
             border-radius: 999px;
@@ -816,7 +819,8 @@
                     <a id="vulnToggle"
                         href="#"
                         onclick="toggleVulnerabilities(event)"
-                        class="vulnToggle">
+                        class="vulnToggle"
+                        style="background-color: {{ '#1f8b1f' if hardened else '#b30000' }};">
                         Toggle Vulnerabilities
                     </a>
                     <!--Hashing toggle (to discuss with teammates)-->
@@ -1184,7 +1188,7 @@
 
         function updateVulnUI() {
             const btn = document.getElementById("vulnToggle");
-
+            if (!btn) return;
             btn.style.backgroundColor = hardened ? "#1f8b1f" : "#b30000";
         }
 
@@ -1213,7 +1217,20 @@
                 alert('Error toggling vulnerabilities');
             }
         }
-        document.addEventListener("DOMContentLoaded", updateVulnUI);
+        //document.addEventListener("DOMContentLoaded", updateVulnUI);
+        //document.addEventListener("DOMContentLoaded", async () => {
+        //    try {
+        //        const res = await fetch('/api/toggle/status');
+        //        const data = await res.json();
+
+                // Update our local variable with the server's truth
+        //        hardened = !!data.hardened;
+        //        updateVulnUI();
+        //    } catch (err) {
+        //        console.error("Initial load failed:", err);
+        //        updateVulnUI(); // Fallback to default UI
+        //        }
+        //});
     </script>
 
     <script>
