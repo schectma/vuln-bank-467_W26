@@ -12,13 +12,13 @@
  
      runs-on: ubuntu-latest
      services:
-     # Needed for SQLi testing as there needs to be database entries.
+     # Database needed for certain testing
       postgres:
         image: postgres:15
         env:
-          POSTGRES_DB: app_test_db
-          POSTGRES_USER: test_user
-          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: vulnerable_bank
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
         ports:
           - 5432:5432
         options: >-
