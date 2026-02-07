@@ -11,6 +11,21 @@
    build:
  
      runs-on: ubuntu-latest
+     services:
+     # Needed for SQLi testing as there needs to be database entries.
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: app_test_db
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
  
      steps:
      - uses: actions/checkout@v4
@@ -32,3 +47,12 @@
     #  - name: Test with Unittest
     #    run: |
     #      python tests.py
+      - name: Install test dependencies
+        run: |
+          pip install pytest
+      - name: Test with Unittest
+        env:
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/app_test_db
+        run: |
+          # Run tests written by team to make sure no existing features are broken by new code
+          pytest -v
