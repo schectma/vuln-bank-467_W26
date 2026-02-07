@@ -14,6 +14,12 @@ services:
       - DB_PASSWORD=postgres
       - DB_HOST=db 
       - DB_PORT=5432
+
+      # Main database
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/vulnerable_bank
+
+      # Testing database for pytest
+      - TEST_DATABASE_URL=postgresql://postgres:postgres@db:5432/vulnerable_bank_test
     depends_on:
       - db
     volumes:
