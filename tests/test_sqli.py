@@ -112,7 +112,6 @@ def setup_test_db():
 
     app_module.harden = False
 
-
 def toggle_harden(state: bool):
     """
     Helper function to toggle hardening on/off.
@@ -173,14 +172,28 @@ def test_login_vuln_incorrect(client, setup_test_db):
     assert res.status_code == 401
     assert data["status"] == "error"
 
-'''
-def test_login_hardened_inj():
 
-def test_login_hardened_correct():
+def test_login_hardened_inj(client, setup_test_db):
+    """
+    Tests if SQL injection allowed when in hardened state
+    """
+    toggle_harden(True)
 
-def test_login_hardened_incorrect():
+    payload = {
+        "username": "admin' --",
+        "password": "irrelevant"
+    }
 
-def test_login_hardened(client):
+    res = client.post("/login", json=payload)
+    data = res.get_json()
+
+    assert res.status_code == 401
+    assert data["status"] == "error"
+
+def test_login_hardened_correct(client, setup_test_db):
+    """
+    Tests if correct login allowed in hardened state
+    """
     toggle_harden(True)
 
     payload = {
@@ -194,4 +207,20 @@ def test_login_hardened(client):
     assert res.status_code == 200
     assert data["status"] == "success", "Regular login works in hardened mode"
     assert "token" in data
-'''
+
+def test_login_hardened_incorrect(client, setup_test_db):
+    """
+    Tests if incorrect login allowed in hardened state
+    """
+    toggle_harden(True)
+
+    payload = {
+        "username": "adn",
+        "password": "adn123"
+    }
+
+    res = client.post("/login", json=payload)
+    data = res.get_json()
+
+    assert res.status_code == 401
+    assert data["status"] == "error"
