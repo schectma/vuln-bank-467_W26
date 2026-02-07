@@ -1,21 +1,18 @@
 import pytest
-import json
 import psycopg2
 import os
-import sys
-# Imports app.py
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-from app import app
+from app import app as flask_app
 import app as app_module
+
 
 @pytest.fixture
 def client():
     # Puts Flask into testing mode
-    app.config["TESTING"] = True
+    flask_app.config["TESTING"] = True
     # Creates Flask test client
-    with app.test_client() as client:
+    with flask_app.test_client() as client:
         yield client
+
 
 # Create test database
 @pytest.fixture(scope="session", autouse=True)
@@ -50,13 +47,12 @@ def ensure_test_db():
     yield
 
     # Delete the test database
-
     conn = psycopg2.connect(main_db_url)
     conn.autocommit = True
     cur = conn.cursor()
 
     # Disconnect users from DB before dropping
-    cur.execute(f"""
+    cur.execute("""
         SELECT pg_terminate_backend(pid)
         FROM pg_stat_activity
         WHERE datname = %s;
@@ -67,6 +63,7 @@ def ensure_test_db():
 
     cur.close()
     conn.close()
+
 
 @pytest.fixture(scope="function")
 def setup_test_db():
@@ -96,7 +93,13 @@ def setup_test_db():
 
     # Insert known test users
     cur.execute("""
-        INSERT INTO users (username, password, account_number, balance, is_admin)
+        INSERT INTO users (
+        username,
+        password,
+        account_number,
+        balance,
+        is_admin
+        )
         VALUES
         ('admin', 'admin123', 'ADMIN001', 1000000.0, True),
         ('testuser1', 'testpassword1', 'TEST001', 1000.0, False),
@@ -112,12 +115,14 @@ def setup_test_db():
 
     app_module.harden = False
 
+
 def toggle_harden(state: bool):
     """
     Helper function to toggle hardening on/off.
     """
     app_module.harden = state
-    app.config["HARDENED"] = state
+    flask_app.config["HARDENED"] = state
+
 
 # testing login()
 def test_login_vuln_inj(client, setup_test_db):
@@ -136,6 +141,7 @@ def test_login_vuln_inj(client, setup_test_db):
 
     assert res.status_code == 200
     assert data["status"] == "success"
+
 
 def test_login_vuln_correct(client, setup_test_db):
     """
@@ -190,6 +196,7 @@ def test_login_hardened_inj(client, setup_test_db):
     assert res.status_code == 401
     assert data["status"] == "error"
 
+
 def test_login_hardened_correct(client, setup_test_db):
     """
     Tests if correct login allowed in hardened state
@@ -205,8 +212,9 @@ def test_login_hardened_correct(client, setup_test_db):
     data = res.get_json()
 
     assert res.status_code == 200
-    assert data["status"] == "success", "Regular login works in hardened mode"
+    assert data["status"] == "success"
     assert "token" in data
+
 
 def test_login_hardened_incorrect(client, setup_test_db):
     """
