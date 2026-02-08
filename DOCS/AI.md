@@ -27,3 +27,16 @@ Fifteen (15) instances of five (5) distinct vulnerabilities are present across s
 1. Toggle vulnerability state to protected
 2. Repeat exploit steps above and observe outcome:
 ![alt text](./screenshots/AI-4.png)
+
+### Input Validation (CWE-20)
+Absence or lack of any checks on any properties of the incoming data -- prompt length, in this case.
+
+#### Exploit
+1. Engage chat agent from any screen.
+2. Copy contents of ./exploits/oversized.txt and paste into chat message field. Press send and observe outcome:
+![alt text](./screenshots/AI_CWE-20_a.png)
+
+#### Mitigate
+1. Toggle vulnerability state to protected
+2. Repeat exploit steps above and observe outcome:
+![alt text](./screenshots/AI_CWE-20_b.png)
