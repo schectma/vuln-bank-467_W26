@@ -30,7 +30,9 @@ app = Flask(__name__)
 CORS(app)
 
 # Initialize database connection pool
-init_connection_pool()
+#init_connection_pool()
+if os.getenv("APP_ENV") != "test":
+    init_connection_pool()
 
 SWAGGER_URL = '/api/docs'
 API_URL = '/static/openapi.json'
@@ -2206,7 +2208,8 @@ def ai_rate_limit_status():
         }), 500
 
 if __name__ == '__main__':
-    init_db()
+    if os.getenv("APP_ENV") != "test":
+        init_db()
     init_auth_routes(app)
     # Vulnerability: Debug mode enabled in production
     app.run(host='0.0.0.0', port=5000, debug=True)
