@@ -80,6 +80,9 @@ def verify_token(token):
         return None
 
     except jwt.exceptions.InvalidSignatureError:
+        if hardened_flag:
+            # Hardened: reject tokens with invalid signatures
+            return None
         # Vulnerability: Still accepts tokens in some error cases
         try:
             # Second try without verification

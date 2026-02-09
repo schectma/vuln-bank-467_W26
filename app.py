@@ -18,6 +18,7 @@ from collections import defaultdict
 import requests
 from urllib.parse import urlparse
 import platform
+import secrets
 from mitigations import BOLA, MA
 from mitigations import sql_injections
 from mitigations import session_exp
@@ -237,6 +238,9 @@ def format_error_response(error, status_code=500, include_debug=None):
             error_response['debug_info'] = include_debug
         return jsonify(error_response), status_code
 
+# Preserve JSON key insertion order (don't sort alphabetically)
+app.config['JSON_SORT_KEYS'] = False
+
 # Set Flask config from harden variable
 app.config["HARDENED"] = harden
 
@@ -384,6 +388,11 @@ def generate_cvv():
 @app.route('/')
 def index():
     return render_template('index.html')
+
+@app.route('/tools/forge-jwt')
+def forge_jwt_tool():
+    """Serve the JWT forgery tool from localhost (secure context for crypto.subtle)."""
+    return flask.send_from_directory('.', 'forge_jwt.html')
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -542,11 +551,15 @@ def login():
                 # Session cookie security configuration
                 if harden:
                     # Hardened: Secure cookie configuration
+                    # Only set Secure flag when actually on HTTPS;
+                    # on HTTP localhost the Secure flag would prevent
+                    # the cookie from being stored in some browsers.
+                    is_https = request.is_secure or request.headers.get('X-Forwarded-Proto') == 'https'
                     response.set_cookie(
                         'token',
                         token,
                         httponly=True,
-                        secure=True,  # Requires HTTPS in production
+                        secure=is_https,
                         samesite='Strict',  # Prevent CSRF attacks
                         max_age=3600  # 1 hour expiration
                     )
@@ -1333,6 +1346,17 @@ def harden_toggle():
     SECURITY_HARDENING_ENABLED = harden
 
     app.config["HARDENED"] = harden
+
+    # Update JWT secret in auth module to match hardened state
+    if harden:
+        # Use env var if it's strong enough, otherwise generate a random one
+        env_secret = auth.JWT_SECRET_KEY_ENV
+        if env_secret == 'secret123' or len(env_secret) < 32:
+            auth.JWT_SECRET = secrets.token_urlsafe(32)
+        else:
+            auth.JWT_SECRET = env_secret
+    else:
+        auth.JWT_SECRET = "secret123"
 
     return jsonify({
         'status': 'success',

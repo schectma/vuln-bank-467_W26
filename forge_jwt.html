@@ -138,7 +138,7 @@
                 <span class="step-number">1</span>
                 <h3 style="margin: 0;">Decode Original Token</h3>
             </div>
-            <label for="originalToken">Paste JWT Token from LocalStorage:</label>
+            <label for="originalToken">Paste JWT Token (from Cookies tab in DevTools):</label>
             <textarea id="originalToken" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."></textarea>
             <button onclick="decodeToken()">Decode Token</button>
             <div id="decodedOutput"></div>
@@ -332,6 +332,17 @@
                 // Fallback: select the text
                 alert('Copy the selected text manually (Ctrl+C)');
             });
+        }
+
+        // Check for crypto.subtle availability (requires secure context)
+        if (!window.crypto || !window.crypto.subtle) {
+            const warning = document.createElement('div');
+            warning.className = 'error';
+            warning.innerHTML = '<strong>crypto.subtle is not available.</strong><br>' +
+                'This tool requires a secure context. Please open it via ' +
+                '<a href="http://localhost:5000/tools/forge-jwt">http://localhost:5000/tools/forge-jwt</a> ' +
+                'instead of opening the file directly (file:// protocol).';
+            document.querySelector('.container').insertBefore(warning, document.querySelector('.section'));
         }
 
         console.log('JWT Forgery Tool loaded - using native Web Crypto API');

@@ -70,22 +70,6 @@
         <button onclick="attackBalance()">Launch Attack on /check_balance/ACC1001</button>
         <div id="result2"></div>
 
-        <hr>
-
-        <h2>Expected Results:</h2>
-        <h3>VULNERABLE Mode (SECURITY_HARDENING_ENABLED=false):</h3>
-        <ul>
-            <li>✗ Both attacks succeed</li>
-            <li>✗ Data is stolen and displayed below</li>
-            <li>✗ Response headers show: <code>access-control-allow-origin: *</code></li>
-        </ul>
-
-        <h3>HARDENED Mode (SECURITY_HARDENING_ENABLED=true):</h3>
-        <ul>
-            <li>✓ Both attacks are BLOCKED</li>
-            <li>✓ Console shows CORS error</li>
-            <li>✓ No data is returned</li>
-        </ul>
     </div>
 
     <script>

