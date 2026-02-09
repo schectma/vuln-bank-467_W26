@@ -1,6 +1,6 @@
 from app import app as flask_app
-from database import init_connection_pool, init_db
 import app as app_module
+
 
 def toggle_harden(state: bool):
     """

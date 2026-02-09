@@ -5,6 +5,7 @@ from app import app as flask_app
 from database import init_connection_pool, init_db
 import app as app_module
 
+
 @pytest.fixture
 def client():
     # Puts Flask into testing mode
@@ -67,6 +68,7 @@ def ensure_test_db():
 
     cur.close()
     conn.close()
+
 
 # Add whatever information needs to be in the test database here
 @pytest.fixture(scope="function")
