@@ -7,6 +7,7 @@ import requests
 
 ALLOWED_IMAGE_HOSTS = {"oregonstate.edu"}  # adjust to your allowlist
 
+
 def _is_private_address(hostname: str) -> bool:
     try:
         ip = ipaddress.ip_address(hostname)
