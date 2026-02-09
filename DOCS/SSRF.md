@@ -7,6 +7,7 @@ At least one registered user account with a valid token. Log out then back in ag
 ## Demonstrations
 
 ### upload_profile_picture_url()
+This endpoint allows an external URL to navigate to and influence any other endpoint.
 #### Exploit
 1. Log in as any user.
 2. Open the browser console
@@ -26,7 +27,9 @@ At least one registered user account with a valid token. Log out then back in ag
     })
     }).then(r => r.json()).then(console.log);`
 
-![alt text](./screenshots/SSRF-pic_a.png.png)
+![alt text](./screenshots/SSRF-pic_a.png)
+
+Feel free to attempt this with other internal endpoints like `http://127.0.0.1:5000/internal/config.json` and `http://127.0.0.1:5000/latest/meta-data/` as described in the original vuln-bank docs.
 
 #### Mitigate
 1. Enable hardening.
