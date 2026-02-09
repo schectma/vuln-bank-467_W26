@@ -28,7 +28,7 @@ def test_login_valid(client, setup_test_db):
 def test_login_invalid(client, setup_test_db):
     """
     Tests that the user 'testuser1' is not able to log into
-    the app with the correct username and password.
+    the app with the incorrect username and password.
     """
     toggle_harden(False)
 
@@ -42,4 +42,3 @@ def test_login_invalid(client, setup_test_db):
 
     assert res.status_code == 401
     assert data["status"] == "error"
-    assert "token" in data
