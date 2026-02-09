@@ -54,6 +54,9 @@ harden = False
 
 app.config["HARDENED"] = harden
 
+# Hashing feature flag
+app.config["HASHMODE"] = 0
+
 # Rate limiting configuration
 RATE_LIMIT_WINDOW = 3 * 60 * 60  # 3 hours in seconds
 UNAUTHENTICATED_LIMIT = 5  # requests per IP per window
@@ -197,7 +200,10 @@ def generate_cvv():
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    #return render_template('index.html')
+    vulnState = app.config.get("HARDENED", False)
+    hashState = app.config.get("HASHMODE", 0)
+    return render_template('index.html', hardened=vulnState, hashmode=hashState)
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -1032,6 +1038,19 @@ def harden_toggle():
     return jsonify({
         'status': 'success',
         'hardened': harden
+    })
+
+@app.route('/api/toggle/hashing', methods=['POST'])
+def hashing_toggle():
+    currentHash = app.config.get("HASHMODE", 0)
+
+    newHash = (currentHash + 1) % 4
+
+    app.config["HASHMODE"] = newHash
+
+    return jsonify({
+        'status': 'success',
+        'hashmode': newHash
     })
 
 # Forgot password endpoint
