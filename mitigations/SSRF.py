@@ -6,8 +6,6 @@ from werkzeug.utils import secure_filename
 import requests
 
 ALLOWED_IMAGE_HOSTS = {"oregonstate.edu"}  # adjust to your allowlist
-MAX_IMAGE_BYTES = 2 * 1024 * 1024  # 2MB
-
 
 def _is_private_address(hostname: str) -> bool:
     try:
@@ -52,9 +50,7 @@ def fetch_and_store_image(image_url: str, upload_folder: str) -> tuple[str, str]
     if not content_type.startswith("image/"):
         raise ValueError("URL did not return an image")
 
-    content = resp.raw.read(MAX_IMAGE_BYTES + 1)
-    if len(content) > MAX_IMAGE_BYTES:
-        raise ValueError("Image too large")
+    content = resp.content
 
     parsed = urlparse(image_url)
     basename = os.path.basename(parsed.path) or "downloaded"
