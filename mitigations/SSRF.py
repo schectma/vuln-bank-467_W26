@@ -8,6 +8,7 @@ import requests
 ALLOWED_IMAGE_HOSTS = {"oregonstate.edu"}  # adjust to your allowlist
 MAX_IMAGE_BYTES = 2 * 1024 * 1024  # 2MB
 
+
 def _is_private_address(hostname: str) -> bool:
     try:
         ip = ipaddress.ip_address(hostname)
