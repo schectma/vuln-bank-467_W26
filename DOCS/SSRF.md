@@ -30,7 +30,10 @@ At least one registered user account with a valid token. Log out then back in ag
 
 #### Mitigate
 1. Enable hardening.
-2. Paste the following code, press enter, then observe outcome (succeeds; domain on allowlist):
+2. Repeat exploit steps above and observe outcome:
+![alt text](./screenshots/SSRF-badurl.png)
+
+3. Paste the following code, press enter, then observe outcome (succeeds; domain on allowlist):
 
     `const origin = window.location.origin;
     const token = localStorage.getItem('jwt_token');
@@ -47,19 +50,4 @@ At least one registered user account with a valid token. Log out then back in ag
     }).then(r => r.json()).then(console.log);`
 ![alt text](./screenshots/SSRF-goodurl.png)
 
-3. Paste the following code, press enter, then observe outcome (fails; domain not on allowlist):
 
-    `const origin = window.location.origin;
-    const token = localStorage.getItem('jwt_token');
-
-    fetch(`${origin}/upload_profile_picture_url`, {
-    method: 'POST',
-    headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-    },
-    body: JSON.stringify({
-        image_url: 'https://www.uoregon.edu/sites/default/files/styles/custom_original/public/2026-02/carousel-sleep.webp?itok=NRFCguU-'
-    })
-    }).then(r => r.json()).then(console.log);`
-![alt text](./screenshots/SSRF-badurl.png)

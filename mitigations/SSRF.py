@@ -15,6 +15,7 @@ def _is_private_address(hostname: str) -> bool:
     except ValueError:
         return False
 
+
 def _is_allowed_url(image_url: str) -> bool:
     try:
         parsed = urlparse(image_url)
@@ -30,6 +31,7 @@ def _is_allowed_url(image_url: str) -> bool:
         return True
     except Exception:
         return False
+
 
 def fetch_and_store_image(image_url: str, upload_folder: str) -> tuple[str, str]:
     if not _is_allowed_url(image_url):
