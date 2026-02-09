@@ -16,7 +16,6 @@ services:
       - DB_PASSWORD=postgres
       - DB_HOST=db
       - DB_PORT=5432
-      # Code decides which database to use based on APP_ENV
       # Main database
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/vulnerable_bank
 
