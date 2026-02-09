@@ -10,7 +10,7 @@ XSS allows attackers to inject malicious scripts into web pages viewed by other 
 
 ## Toggle Setup
 
-Use the global **Toggle Mitigation** button on the app's homepage to switch between Vulnerable (protections off) and Hardened (protections on) states. For the exploit steps, ensure the toggle is set to **Vulnerable**. For mitigation verification, set it to **Hardened**—no env changes or restarts needed.
+Use the global **Toggle Vulnerabilities** button on the app's homepage to switch between Vulnerable (protections off) and Hardened (protections on) states. For the exploit steps, ensure the toggle is set to **Vulnerable**. For mitigation verification, set it to **Hardened**—no env changes or restarts needed.
 
 **Important — Token Expiration in Hardened Mode:** When the toggle is set to Hardened, JWT tokens expire after **5 seconds** by default, which is too short to complete any test. Before testing mitigations, increase the expiration in `mitigations/session_exp.py` at **line 10**. Change:
 ```python
@@ -32,7 +32,7 @@ Allows injection of malicious scripts through transaction descriptions.
 
 1. Confirm the app is in **Vulnerable** mode (Toggle Mitigation should indicate protections are off)
 2. Log in to your account
-3. Navigate to "Send Money" section in the dashboard
+3. Navigate to "Money Transfer" section in the dashboard
 4. Fill in the transfer form:
    - **Recipient Account Number**: Enter any valid account number (e.g., `ACC1002` for another test user)
    - **Amount**: Enter any amount (e.g., `10.00`)
@@ -40,9 +40,9 @@ Allows injection of malicious scripts through transaction descriptions.
      ```
      <img src=x onerror="alert('XSS Vulnerability!')">
      ```
-5. Click "Transfer" button to submit the transaction
-6. Navigate to "Transaction History" section on your dashboard (or refresh the page)
-7. Observe the alert popup appears when the transaction history renders
+5. Click "Send Money" button to submit the transaction
+6. Navigate to "Transaction History" section on your dashboard
+7. Observe the alert popup appears immediately when the page renders
 
 **Expected Result (Vulnerable):** Alert popup displays "XSS Vulnerability!" demonstrating arbitrary JavaScript execution. The script executes each time the transaction history is rendered (including immediately after the transfer completes).
 
