@@ -40,8 +40,7 @@ def fetch_and_store_image(image_url: str, upload_folder: str) -> tuple[str, str]
         image_url,
         timeout=5,
         allow_redirects=False,
-        verify=True,
-        stream=True
+        verify=True
     )
     if resp.status_code >= 400:
         raise ValueError(f"Failed to fetch URL: HTTP {resp.status_code}")
