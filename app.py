@@ -1057,6 +1057,23 @@ def hashing_toggle():
         'hashmode': newHash
     })
 
+@app.route('/api/hashmode', methods=['GET'])
+def get_hashmode():
+    # Retrieves the current hashmode
+    # This is to help demo the hashing password mitigation
+    currentHash = app.config.get("HASHMODE", 0)
+    modeName = {
+        0: "None - Plaintext",
+        1: "Weak - SHA-1",
+        2: "Medium - SHA-256",
+        3: "Strong - bcrypt"
+    }
+
+    return jsonify({
+        'hashmode': currentHash,
+        'modename': modeName.get(currentHash, 'unknown')
+    })
+
 # Forgot password endpoint
 @app.route('/forgot-password', methods=['GET', 'POST'])
 def forgot_password():
