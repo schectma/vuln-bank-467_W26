@@ -18,10 +18,12 @@ from collections import defaultdict
 import requests
 from urllib.parse import urlparse
 import platform
+import psycopg2
 from mitigations import BOLA, MA
 from mitigations import sql_injections
 from mitigations import session_exp
 from mitigations import SSRF
+from mitigations import hashing
 
 # Load environment variables
 load_dotenv()
@@ -1051,6 +1053,9 @@ def hashing_toggle():
     newHash = (currentHash + 1) % 4
 
     app.config["HASHMODE"] = newHash
+    # Creates hashed database
+    #hashing.create_hashing_db()
+    hash_database()
 
     return jsonify({
         'status': 'success',
@@ -1071,8 +1076,64 @@ def get_hashmode():
 
     return jsonify({
         'hashmode': currentHash,
-        'modename': modeName.get(currentHash, 'unknown')
+        'modename': modeName.get(currentHash)
     })
+
+@app.route('/api/db-hashing', methods=['POST'])
+def hash_database():
+    # Gets the hashmode
+    # Creates users in the database for demo
+
+    try:
+        data = request.get_json()
+        mode = int(data.get("mode", 0))
+        if not (0 <= mode < 4):
+            return jsonify({
+            'status': 'Mode does not exist'}), 400
+        else:
+            # Make the database
+            hashing.create_hashing_db(mode)
+
+    except Exception as e:
+        print(f"Hashing database error: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
+# To view passwords for hashing demo
+@app.route('/api/hashed-passwords', methods=['GET'])
+def hashed_pass():
+    try:
+        conn = psycopg2.connect(
+        dbname=os.getenv("DB_NAME"),
+        user=os.getenv("DB_USER"),
+        password=os.getenv("DB_PASSWORD"),
+        host=os.getenv("DB_HOST"),
+        port=os.getenv("DB_PORT")
+        )
+
+        cur = conn.cursor()
+
+        cur.execute("""
+            SELECT username, password
+            FROM users
+        """)
+
+        rows = cur.fetchall()
+
+        cur.close()
+        conn.close()
+
+        return jsonify(rows)
+
+    except Exception as e:
+        print(f"Can't view passwords: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
 
 # Forgot password endpoint
 @app.route('/forgot-password', methods=['GET', 'POST'])
