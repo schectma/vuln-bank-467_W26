@@ -22,6 +22,7 @@ from mitigations import BOLA, MA
 from mitigations import sql_injections
 from mitigations import session_exp
 from mitigations import SSRF
+from mitigations import rate_limiting
 
 # Load environment variables
 load_dotenv()
@@ -107,33 +108,9 @@ def check_rate_limit(key, limit):
     return True, request_count + 1, limit
 
 
-def ip_rate_limit(prefix: str, limit: int):
-    """Rate limiting decorator that uses IP to enforce hardening toggle."""
-    def decorator(f):
-        @wraps(f)
-        def wrapped(*args, **kwargs):
-            if not app.config.get("HARDENED", False):
-                return f(*args, **kwargs)
-            client_ip = get_client_ip()
-            key = f"{prefix}_ip_{client_ip}"
-            allowed, count, lim = check_rate_limit(key, limit)
-
-            if not allowed:
-                return jsonify({
-                    "status": "error",
-                    "message": f"Too many requests. Rate limit: {lim}.",
-                    "rate_limit_info": {
-                        "limit_type": "ip",
-                        "client_ip": client_ip,
-                        "current_count": count,
-                        "limit": lim,
-                        "window_hours": 3
-                    }
-                }), 429
-
-            return f(*args, **kwargs)
-        return wrapped
-    return decorator
+# Necessary for using helpers in rate-limiting.py
+rate_limiting.init_rate_limiting(get_client_ip, check_rate_limit)
+ip_rate_limit = rate_limiting.ip_rate_limit
 
 
 def ai_rate_limit(f):
@@ -1069,6 +1046,7 @@ def harden_toggle():
     harden = not harden
 
     app.config["HARDENED"] = harden
+    rate_limit_storage.clear()
 
     return jsonify({
         'status': 'success',
