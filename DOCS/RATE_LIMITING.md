@@ -14,7 +14,7 @@ To highlight this exploit, we will observe how a lack of rate limiting allows un
 
 1) Confirm app is in vulnerable/non-hardened state (check toggle on homepage).
 2) From the homepage, select Login.
-3) With an incorrect password, try to log into the user's test account at least 10 times. 
+3) With an incorrect password, try to log into the user's test account at least 10 times. Open the console and/or network monitor to verify.
 4) Log in using the correct password successfully.
 
 ## Login Rate Limiting (Mitigation/Hardened)
