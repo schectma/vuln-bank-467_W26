@@ -12,7 +12,7 @@ Security misconfiguration occurs when security settings are defined, implemented
 
 **Runtime Toggle (Recommended for Testing)**
 
-Use the Security Hardening toggle on the dashboard at `http://localhost:5000/dashboard` to switch between vulnerable and hardened modes without restarting the application.
+Use the **Toggle Vulnerabilities** button on the homepage at `http://localhost:5000/` to switch between vulnerable and hardened modes without restarting the application.
 
 ---
 
@@ -42,7 +42,7 @@ Exposes application to clickjacking, MIME-type sniffing, and other attacks.
 
 **Using Runtime Toggle**
 1. Log out of the application
-2. Go to `http://localhost:5000/` and click "Enable Security Hardening" toggle
+2. Go to `http://localhost:5000/` and click the **Toggle Vulnerabilities** button
 3. Log back in at `http://localhost:5000/login`
 4. Press F12 to open browser DevTools → click the **Network** tab
 5. Refresh the page (F5)
@@ -67,12 +67,11 @@ Allows any origin to make cross-origin requests, exposing sensitive data.
 ##### Method 1: Malicious HTML Page Attack
 
 1. Ensure Security Hardening is **disabled** (vulnerable mode)
-2. Ensure you are logged in and on the dashboard (`http://localhost:5000/dashboard`) in your browser
-3. Open the included `attack.html` file by double-clicking it (located in the project root)
+2. Open the included `attack.html` file by double-clicking it (located in the project root)
    - The file opens with `file://` origin (simulating a malicious website)
    - It provides two attack buttons with visual feedback
-4. Click "Launch Attack on /api/security-config"
-5. Click "Launch Attack on /check_balance/ACC1001"
+3. Click "Launch Attack on /api/security-config"
+4. Click "Launch Attack on /check_balance/ACC1001"
 
 **Expected Result (Vulnerable):** Both attacks show red "ATTACK SUCCEEDED" boxes. Attack 1 displays the full security configuration JSON stolen from the server. Attack 2 returns a response from the balance endpoint — the important thing is that the cross-origin request was **not blocked**. The server responded with `Access-Control-Allow-Origin: *`, which means any website can read the response.
 
@@ -96,7 +95,7 @@ Allows any origin to make cross-origin requests, exposing sensitive data.
 
 **Option 1: Using Runtime Toggle**
 1. Go to `http://localhost:5000`
-2. Enable the "Global Security Hardening" toggle at the top of the page
+2. Click the **Toggle Vulnerabilities** button
 3. Open `attack.html` and click both attack buttons
 
 **Option 2: Using Environment Variables (Persistent)**
@@ -106,7 +105,7 @@ Allows any origin to make cross-origin requests, exposing sensitive data.
    ALLOWED_CORS_ORIGINS=http://localhost:5000,http://127.0.0.1:5000
    ```
 2. Restart the application:
-   - Docker: `docker-compose down && docker-compose up -d`
+   - Docker: `docker-compose down -v --remove-orphans && docker-compose up -d --build`
    - Local: Stop and run `python app.py`
 3. Open `attack.html` and click both attack buttons
 
@@ -172,8 +171,8 @@ Exposes detailed error messages and debug endpoints with sensitive information.
 #### Mitigate
 
 **Option 1: Using Runtime Toggle (Recommended)**
-1. Go to `http://localhost:5000/dashboard`
-2. Click "Enable Security Hardening" toggle
+1. Go to `http://localhost:5000/`
+2. Click the **Toggle Vulnerabilities** button
 3. Try accessing the debug endpoint:
    ```
    http://localhost:5000/debug/users
@@ -185,7 +184,7 @@ Exposes detailed error messages and debug endpoints with sensitive information.
    SECURITY_HARDENING_ENABLED=true
    ```
 2. Restart the application:
-   - Docker: `docker-compose down && docker-compose up -d`
+   - Docker: `docker-compose down -v --remove-orphans && docker-compose up -d --build`
    - Local: Stop server (Ctrl+C) and run `python app.py`
 3. Try accessing the debug endpoint
 

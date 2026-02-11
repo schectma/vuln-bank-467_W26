@@ -2053,6 +2053,9 @@ def create_bill_payment(current_user):
         })
         
     except Exception as e:
+        if harden:
+            return jsonify({'status': 'error', 'message': 'An internal error occurred'}), 500
+        # Vulnerable: exposes raw exception details including DB schema info
         return jsonify({
             'status': 'error',
             'message': str(e)
@@ -2330,6 +2333,21 @@ def ai_rate_limit_status():
             'status': 'error',
             'message': str(e)
         }), 500
+
+@app.route('/api/security-config')
+def security_config():
+    """
+    Endpoint that returns the current security configuration state.
+    Used by attack.html to demonstrate the permissive CORS vulnerability —
+    when vulnerable, any cross-origin request can read this response.
+    """
+    return jsonify({
+        'security_hardening_enabled': harden,
+        'cors_restricted': harden,
+        'security_headers_enabled': harden,
+        'debug_mode_disabled': harden,
+    })
+
 
 if __name__ == '__main__':
     init_db()
