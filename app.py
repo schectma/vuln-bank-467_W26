@@ -387,7 +387,9 @@ def generate_cvv():
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    vulnState = app.config.get("HARDENED", False)
+    hashState = app.config.get("HASHMODE", 0)
+    return render_template('index.html', hardened=vulnState, hashmode=hashState)
 
 @app.route('/tools/forge-jwt')
 def forge_jwt_tool():
@@ -1350,7 +1352,7 @@ def harden_toggle():
     # Update JWT secret in auth module to match hardened state
     if harden:
         # Use env var if it's strong enough, otherwise generate a random one
-        env_secret = auth.JWT_SECRET_KEY_ENV
+        env_secret = os.getenv('JWT_SECRET_KEY', 'secret123')
         if env_secret == 'secret123' or len(env_secret) < 32:
             auth.JWT_SECRET = secrets.token_urlsafe(32)
         else:
