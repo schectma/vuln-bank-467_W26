@@ -3,7 +3,7 @@ import psycopg2
 import os
 import random
 import hashlib
-import bcrypt
+from argon2 import PasswordHasher
 from flask import current_app
 
 def initialize():
@@ -29,13 +29,16 @@ def add_demo_users():
     conn, cur = get_database()
 
     newUsers = [
-        ('hashadmin', 'Aa@123456', 'HADMIN001', 1000000.0, True),
+        ('hashadmin', 'Admin@123', 'HADMIN001', 1000000.0, True),
         ('hashuser1', '123456', 'HUSER001', 1000.0, False),
         ('hashuser2', 'Password', 'HUSER002', 1000.0, False),
         ('hashuser3', 'hashtesting123', 'HUSER003', 1000.0, False),
         ('hashuser4', '1234567890', 'HUSER004', 1000.0, False),
         ('hashuser5', '@kfi&mdloromb!!', 'HUSER005', 1000.0, False),
-        ('hashuser6', 'P@SSw0rd', 'HUSER006', 1000.0, False)
+        ('hashuser6', 'P@SSw0rd', 'HUSER006', 1000.0, False),
+        ('hashuser7', '@kfi&mdloromb!!', 'HUSER007', 1000.0, False),
+        ('hashuser8', 'sl&nsd!gmndfg8', 'HUSER008', 1000.0, False),
+        ('hashuser9', 'Aa@123456', 'HUSER009', 1000.0, False)
     ]
 
     for username, password, account_number, balance, is_admin in newUsers:
@@ -141,9 +144,9 @@ def create_hashed_password(password):
         # SHA-256 Medium Hashing without salt
         return hashlib.sha256(password.encode()).hexdigest()
     elif mode == 3:
-        # bcrypt Strong Hashing, automatically salts
-        hpass = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
-        return hpass.decode()
+        # Argon2id Strong Hashing, automatically salts
+        ph = PasswordHasher()
+        return ph.hash(password)
     elif mode == 4:
         return password_options(password)
 
@@ -161,8 +164,8 @@ def password_options(password):
         # SHA-256 Medium Hashing without salt
         return hashlib.sha256(password.encode()).hexdigest()
     elif sel == 3:
-        # bcrypt Strong Hashing, automatically salts
-        hpass = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
-        return hpass.decode()
+        # Argon2id Strong Hashing, automatically salts
+        ph = PasswordHasher()
+        return ph.hash(password)
 
     return password

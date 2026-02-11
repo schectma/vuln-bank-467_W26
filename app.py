@@ -1075,7 +1075,7 @@ def get_hashmode():
         0: "None - Plaintext",
         1: "Weak - SHA-1",
         2: "Medium - SHA-256",
-        3: "Strong - bcrypt",
+        3: "Strong - Argon2id",
         4: "Various Types"
     }
 
