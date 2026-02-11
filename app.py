@@ -21,6 +21,7 @@ import platform
 from mitigations import BOLA, MA
 from mitigations import sql_injections
 from mitigations import session_exp
+from mitigations import SSRF
 
 # Load environment variables
 load_dotenv()
@@ -53,6 +54,9 @@ app.secret_key = "secret123"
 harden = False
 
 app.config["HARDENED"] = harden
+
+# Hashing feature flag
+app.config["HASHMODE"] = 0
 
 # Rate limiting configuration
 RATE_LIMIT_WINDOW = 3 * 60 * 60  # 3 hours in seconds
@@ -197,7 +201,10 @@ def generate_cvv():
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    #return render_template('index.html')
+    vulnState = app.config.get("HARDENED", False)
+    hashState = app.config.get("HASHMODE", 0)
+    return render_template('index.html', hardened=vulnState, hashmode=hashState)
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -631,25 +638,28 @@ def upload_profile_picture_url(current_user):
         if not image_url:
             return jsonify({'status': 'error', 'message': 'image_url is required'}), 400
 
-        # Vulnerabilities:
-        # - No URL scheme/host allowlist (SSRF)
-        # - SSL verification disabled
-        # - Follows redirects
-        # - No content-type or size validation
-        resp = requests.get(image_url, timeout=10, allow_redirects=True, verify=False)
-        if resp.status_code >= 400:
-            return jsonify({'status': 'error', 'message': f'Failed to fetch URL: HTTP {resp.status_code}'}), 400
+        if harden:
+            filename, file_path = SSRF.fetch_and_store_image(image_url, UPLOAD_FOLDER)
+        else:
+            # Vulnerabilities:
+            # - No URL scheme/host allowlist (SSRF)
+            # - SSL verification disabled
+            # - Follows redirects
+            # - No content-type or size validation
+            resp = requests.get(image_url, timeout=10, allow_redirects=True, verify=False)
+            if resp.status_code >= 400:
+                return jsonify({'status': 'error', 'message': f'Failed to fetch URL: HTTP {resp.status_code}'}), 400
 
-        # Derive filename from URL path (user-controlled)
-        parsed = urlparse(image_url)
-        basename = os.path.basename(parsed.path) or 'downloaded'
-        filename = secure_filename(basename)
-        filename = f"{random.randint(1, 1000000)}_{filename}"
-        file_path = os.path.join(UPLOAD_FOLDER, filename)
+            # Derive filename from URL path (user-controlled)
+            parsed = urlparse(image_url)
+            basename = os.path.basename(parsed.path) or 'downloaded'
+            filename = secure_filename(basename)
+            filename = f"{random.randint(1, 1000000)}_{filename}"
+            file_path = os.path.join(UPLOAD_FOLDER, filename)
 
-        # Save content directly without validation
-        with open(file_path, 'wb') as f:
-            f.write(resp.content)
+            # Save content directly without validation
+            with open(file_path, 'wb') as f:
+                f.write(resp.content)
 
         # Store just the filename in DB (same pattern as file upload)
         execute_query(
@@ -664,8 +674,8 @@ def upload_profile_picture_url(current_user):
             'file_path': os.path.join('static/uploads', filename),
             'debug_info': {  # Information disclosure for learning
                 'fetched_url': image_url,
-                'http_status': resp.status_code,
-                'content_length': len(resp.content)
+                'http_status': resp.status_code if not harden else 200,
+                'content_length': len(resp.content) if not harden else None
             }
         })
     except Exception as e:
@@ -1032,6 +1042,19 @@ def harden_toggle():
     return jsonify({
         'status': 'success',
         'hardened': harden
+    })
+
+@app.route('/api/toggle/hashing', methods=['POST'])
+def hashing_toggle():
+    currentHash = app.config.get("HASHMODE", 0)
+
+    newHash = (currentHash + 1) % 4
+
+    app.config["HASHMODE"] = newHash
+
+    return jsonify({
+        'status': 'success',
+        'hashmode': newHash
     })
 
 # Forgot password endpoint
