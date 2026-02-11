@@ -18,6 +18,7 @@ from collections import defaultdict
 import requests
 from urllib.parse import urlparse
 import platform
+import flask
 from mitigations import BOLA, MA
 from mitigations import sql_injections
 from mitigations import session_exp
@@ -50,10 +51,104 @@ app.register_blueprint(swaggerui_blueprint, url_prefix=SWAGGER_URL)
 # Hardcoded secret key (CWE-798)
 app.secret_key = "secret123"
 
+# ==========================================
+# SECURITY MISCONFIGURATION TOGGLES
+# ==========================================
+SECURITY_HARDENING_ENABLED = os.getenv('SECURITY_HARDENING_ENABLED', 'false').lower() == 'true'
+ALLOWED_CORS_ORIGINS = os.getenv('ALLOWED_CORS_ORIGINS', '').split(',') if os.getenv('ALLOWED_CORS_ORIGINS') else []
+
 # Hardening feature flag
-harden = False
+harden = SECURITY_HARDENING_ENABLED
 
 app.config["HARDENED"] = harden
+
+# CORS origin validation (CWE-942)
+@app.before_request
+def validate_cors_origin():
+    """
+    Block requests from unauthorized origins when hardened.
+    In vulnerable mode, allow all origins including null (file://).
+    """
+    hardened = app.config.get('HARDENED', False)
+    origin = request.headers.get('Origin')
+
+    if origin:
+        scheme = 'https' if request.is_secure else 'http'
+        same_origin = f"{scheme}://{request.host}"
+        is_same_origin = (origin == same_origin)
+    else:
+        is_same_origin = True  # No Origin header = same-origin or non-browser request
+
+    if request.method == 'OPTIONS':
+        if hardened and origin and not is_same_origin:
+            if origin == 'null':
+                return jsonify({'error': 'CORS origin not allowed'}), 403
+            if ALLOWED_CORS_ORIGINS:
+                if origin not in ALLOWED_CORS_ORIGINS:
+                    return jsonify({'error': 'CORS origin not allowed'}), 403
+            else:
+                return jsonify({'error': 'CORS origin not allowed'}), 403
+        return make_response('', 200)
+
+    if hardened and origin and not is_same_origin:
+        if origin == 'null':
+            return jsonify({'error': 'CORS origin not allowed'}), 403
+        if ALLOWED_CORS_ORIGINS:
+            if origin not in ALLOWED_CORS_ORIGINS:
+                return jsonify({'error': 'CORS origin not allowed'}), 403
+        else:
+            return jsonify({'error': 'CORS origin not allowed'}), 403
+
+# Security headers middleware (CWE-16)
+@app.after_request
+def set_security_headers(response):
+    """
+    Apply security headers based on configuration.
+    When hardening is enabled, adds comprehensive security headers.
+    When disabled (vulnerable), exposes server version info.
+    """
+    if app.config.get('HARDENED', False):
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        response.headers['X-Frame-Options'] = 'DENY'
+        response.headers['X-XSS-Protection'] = '1; mode=block'
+        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+        response.headers['Content-Security-Policy'] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data:; "
+            "font-src 'self'; "
+            "connect-src 'self'; "
+            "frame-ancestors 'none';"
+        )
+        response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+        response.headers.pop('X-Debug-Info', None)
+        response.headers.pop('X-User-Info', None)
+        response.headers.pop('Server', None)
+        # CORS: only allow whitelisted origins
+        origin = request.headers.get('Origin')
+        if origin and ALLOWED_CORS_ORIGINS and origin in ALLOWED_CORS_ORIGINS:
+            response.headers['Access-Control-Allow-Origin'] = origin
+            response.headers['Access-Control-Allow-Credentials'] = 'true'
+            response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+            response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+            response.headers['Access-Control-Max-Age'] = '600'
+    else:
+        # Vulnerable: expose server version, allow all cross-origin requests
+        try:
+            flask_version = flask.__version__
+        except AttributeError:
+            flask_version = '2.0.1'
+        response.headers['Server'] = f'Flask/{flask_version} Python/{platform.python_version()}'
+        origin = request.headers.get('Origin')
+        if origin:
+            response.headers['Access-Control-Allow-Origin'] = origin
+            response.headers['Access-Control-Allow-Credentials'] = 'true'
+            response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+            response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+        else:
+            response.headers['Access-Control-Allow-Origin'] = '*'
+    return response
 
 # Hashing feature flag
 app.config["HASHMODE"] = 0
@@ -371,16 +466,24 @@ def login():
 
 @app.route('/debug/users')
 def debug_users():
-    users = execute_query("SELECT id, username, password, account_number, is_admin FROM users")
-    return jsonify({'users': [
-        {
-            'id': u[0],
-            'username': u[1],
-            'password': u[2],
-            'account_number': u[3],
-            'is_admin': u[4]
-        } for u in users
-    ]})
+    """
+    Debug endpoint that exposes all users with sensitive data (CWE-215).
+    """
+    if harden:
+        # Hardened: debug endpoint disabled
+        return jsonify({'status': 'error', 'message': 'Not found'}), 404
+    else:
+        # Vulnerable: expose all users including plaintext passwords
+        users = execute_query("SELECT id, username, password, account_number, is_admin FROM users")
+        return jsonify({'users': [
+            {
+                'id': u[0],
+                'username': u[1],
+                'password': u[2],
+                'account_number': u[3],
+                'is_admin': u[4]
+            } for u in users
+        ]})
 
 @app.route('/dashboard')
 @token_required
@@ -2231,5 +2334,11 @@ def ai_rate_limit_status():
 if __name__ == '__main__':
     init_db()
     init_auth_routes(app)
-    # Vulnerability: Debug mode enabled in production
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    if harden:
+        # Hardened: debug mode disabled
+        print("Starting Flask app in PRODUCTION mode (debug=False)")
+        app.run(host='0.0.0.0', port=5000, debug=False)
+    else:
+        # Vulnerable: debug mode enabled in production (CWE-94)
+        print("Starting Flask app in DEBUG mode (debug=True) - INSECURE!")
+        app.run(host='0.0.0.0', port=5000, debug=True)
