@@ -7,11 +7,19 @@ from argon2 import PasswordHasher
 from flask import current_app
 
 def initialize():
+    """
+    Initialize the plaintext table
+    and all users to it
+    """
     create_plaintext_table()
     add_demo_users()
     add_existing_users()
 
 def get_database():
+    """
+    Helper function for database connection/cursor
+    """
+
     conn = psycopg2.connect(
         dbname=os.getenv("DB_NAME"),
         user=os.getenv("DB_USER"),
@@ -21,10 +29,10 @@ def get_database():
     )
     return conn, conn.cursor()
 
-#def create_hashing_db():
 def add_demo_users():
     """
     Add hashed demo users to User table
+    Most of the passwords are simple common passwords
     """
     conn, cur = get_database()
 
@@ -103,6 +111,9 @@ def add_existing_users():
     conn.close()
 
 def create_hashing_db():
+    """
+    Creates a database of hashed passwords
+    """
 
     conn, cur = get_database()
 
@@ -153,6 +164,9 @@ def create_hashed_password(password):
     return password
 
 def password_options(password):
+    """
+    For the various toggle option
+    """
     sel = random.choice([0, 1, 2, 3])
 
     if sel == 0:

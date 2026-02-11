@@ -1048,8 +1048,15 @@ def harden_toggle():
 
 @app.route('/api/toggle/hashing', methods=['POST'])
 def hashing_toggle():
+    """
+    Hashing toggle has 5 modes:
+    None - plaintext
+    Weak - SHA-1
+    Medium - SHA-256
+    Strong - Argon2id
+    Various - Uses random hashing techniques from above
+    """
     currentHash = app.config.get("HASHMODE", 0)
-    #hashing.create_hashing_db()
 
     newHash = (currentHash + 1) % 5
 
@@ -1064,29 +1071,47 @@ def hashing_toggle():
 
 @app.before_first_request
 def setup_hashing():
+    """
+    Adds hashing demo users to User table
+    Creates plaintext table backup (so can go between
+    hashing modes)
+    """
     hashing.initialize()
 
 @app.route('/api/hashmode', methods=['GET'])
 def get_hashmode():
-    # Retrieves the current hashmode
-    # This is to help demo the hashing password mitigation
-    currentHash = app.config.get("HASHMODE", 0)
-    modeName = {
-        0: "None - Plaintext",
-        1: "Weak - SHA-1",
-        2: "Medium - SHA-256",
-        3: "Strong - Argon2id",
-        4: "Various Types"
-    }
+    """
+    Retrieves the current hashmode
+    This is to help demo the hashing password mitigation
+    """
+    try:
+        currentHash = app.config.get("HASHMODE", 0)
+        modeName = {
+            0: "None - Plaintext",
+            1: "Weak - SHA-1",
+            2: "Medium - SHA-256",
+            3: "Strong - Argon2id",
+            4: "Various Types"
+        }
 
-    return jsonify({
-        'hashmode': currentHash,
-        'modename': modeName.get(currentHash)
-    })
+        return jsonify({
+            'hashmode': currentHash,
+            'modename': modeName.get(currentHash)
+        })
 
-# To view passwords for hashing demo
+    except Exception as e:
+        print(f"Can't view hashmode: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
 @app.route('/api/hashed-passwords', methods=['GET'])
 def hashed_pass():
+    """
+    Allows the user to view the passwords for the
+    hashing demo
+    """
     try:
         conn = psycopg2.connect(
         dbname=os.getenv("DB_NAME"),
