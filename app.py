@@ -1049,18 +1049,22 @@ def harden_toggle():
 @app.route('/api/toggle/hashing', methods=['POST'])
 def hashing_toggle():
     currentHash = app.config.get("HASHMODE", 0)
+    #hashing.create_hashing_db()
 
     newHash = (currentHash + 1) % 4
 
     app.config["HASHMODE"] = newHash
     # Creates hashed database
-    #hashing.create_hashing_db()
-    hash_database()
+    hashing.create_hashing_db()
 
     return jsonify({
         'status': 'success',
         'hashmode': newHash
     })
+
+@app.before_first_request
+def setup_hashing():
+    hashing.initialize()
 
 @app.route('/api/hashmode', methods=['GET'])
 def get_hashmode():
@@ -1079,27 +1083,27 @@ def get_hashmode():
         'modename': modeName.get(currentHash)
     })
 
-@app.route('/api/db-hashing', methods=['POST'])
-def hash_database():
+#@app.route('/api/db-hashing', methods=['POST'])
+#def hash_database():
     # Gets the hashmode
     # Creates users in the database for demo
 
-    try:
-        data = request.get_json()
-        mode = int(data.get("mode", 0))
-        if not (0 <= mode < 4):
-            return jsonify({
-            'status': 'Mode does not exist'}), 400
-        else:
-            # Make the database
-            hashing.create_hashing_db(mode)
+#    try:
+#        data = request.get_json()
+#        mode = int(data.get("mode", 0))
+#        if not (0 <= mode < 4):
+#            return jsonify({
+#            'status': 'Mode does not exist'}), 400
+#        else:
+#            # Make the database
+#            hashing.create_hashing_db()
 
-    except Exception as e:
-        print(f"Hashing database error: {str(e)}")
-        return jsonify({
-            'status': 'error',
-            'message': str(e)
-        }), 500
+#    except Exception as e:
+#        print(f"Hashing database error: {str(e)}")
+#        return jsonify({
+#            'status': 'error',
+#            'message': str(e)
+#        }), 500
 
 # To view passwords for hashing demo
 @app.route('/api/hashed-passwords', methods=['GET'])

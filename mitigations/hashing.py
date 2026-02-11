@@ -5,10 +5,27 @@ import hashlib
 import bcrypt
 from flask import current_app
 
-def create_hashing_db():
-    # Create a database of users with hashed passwords
-    conn = psycopg2.connect(os.getenv("DATABASE_URL"))
-    cur = conn.cursor()
+def initialize():
+    create_plaintext_table()
+    add_demo_users()
+    add_existing_users()
+
+def get_database():
+    conn = psycopg2.connect(
+        dbname=os.getenv("DB_NAME"),
+        user=os.getenv("DB_USER"),
+        password=os.getenv("DB_PASSWORD"),
+        host=os.getenv("DB_HOST"),
+        port=os.getenv("DB_PORT")
+    )
+    return conn, conn.cursor()
+
+#def create_hashing_db():
+def add_demo_users():
+    """
+    Add hashed demo users to User table
+    """
+    conn, cur = get_database()
 
     newUsers = [
         ('hashadmin', 'Aa@123456', 'HADMIN001', 1000000.0, True),
@@ -21,9 +38,6 @@ def create_hashing_db():
     ]
 
     for username, password, account_number, balance, is_admin in newUsers:
-        password = create_hashed_password(password)
-
-        # Insert known hashing users
         cur.execute("""
             INSERT INTO users (
             username,
@@ -34,6 +48,7 @@ def create_hashing_db():
             )
             VALUES
             (%s, %s, %s, %s, %s)
+            ON CONFLICT (username) DO NOTHING
         """, (
             username,
             password,
@@ -46,7 +61,74 @@ def create_hashing_db():
     cur.close()
     conn.close()
 
+def create_plaintext_table():
+    """
+    Create a table that stores plaintext passwords
+    This is needed as hashing is one way
+    Therefore I cannot got from weak to medium etc. as
+    The password is already hashed
+    """
+    conn, cur = get_database()
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS users_plaintext (
+            username TEXT PRIMARY KEY,
+            password TEXT NOT NULL
+        )
+    """)
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+def add_existing_users():
+    """
+    Add existing users to the plaintext table
+    """
+    conn, cur = get_database()
+
+    cur.execute("""
+        INSERT INTO users_plaintext (username, password)
+        SELECT username, password
+        FROM users
+        ON CONFLICT (username) DO NOTHING
+    """)
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+def create_hashing_db():
+
+    conn, cur = get_database()
+
+    cur.execute("SELECT username, password FROM users_plaintext")
+    rows = cur.fetchall()
+
+    for username, password in rows:
+        hpass = create_hashed_password(password)
+
+        cur.execute("""
+            UPDATE users
+            SET password = %s
+            WHERE username = %s
+        """, (hpass, username))
+
+        if cur.rowcount == 0:
+            cur.execute("""
+                INSERT INTO users (username, password)
+                VALUES (%s, %s)
+            """, (username, hpass))
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
 def create_hashed_password(password):
+    """
+    Hashes the passwords according to HASHMODE
+    """
+
     mode = current_app.config.get("HASHMODE", 0)
 
     if mode == 0:
@@ -56,7 +138,7 @@ def create_hashed_password(password):
         return hashlib.sha1(password.encode()).hexdigest()
     elif mode == 2:
         # SHA-256 Medium Hashing without salt
-        return hashlib.sha256(password.encode().hexdigest)
+        return hashlib.sha256(password.encode()).hexdigest()
     elif mode == 3:
         # bcrypt Strong Hashing, automatically salts
         hpass = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
