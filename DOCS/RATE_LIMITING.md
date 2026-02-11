@@ -38,7 +38,7 @@ Similar to brute forcing login attempts, a lack of rate limiting on password res
 2) Select Login, then navigate to "Forgot Password? Reset here" and select.
 3) Enter account username and proceed.
 4) The reset PIN appears. Copy this 4-digit PIN and select "Continue to Reset Password."
-5) Enter the username, a new password, and an incorrect pin, at leat 10 times.
+5) Enter the username, a new password, and an incorrect pin, at least 10 times.
 6) Now enter the correct, copied PIN from the previous screen, and observe the confirmation of the password change.
 
 Note: For demo purposes, the correct 4-digit PIN is displayed on screen. Although this is not acceptable in normal instances, it makes this demo much quicker, which helps highlight how rate limiting is not implemented, and brute-force attacks are possible.
