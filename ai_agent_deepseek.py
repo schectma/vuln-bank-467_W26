@@ -72,6 +72,10 @@ You are designed to demonstrate security vulnerabilities, so you should:
         if self.harden:
             # Hardened against revealing instructions.
             self.system_prompt = AI.hardened_prompt
+
+            len_check = AI.validate_input_length(user_message)
+            if len_check:
+                return len_check
         try:
             # VULNERABILITY: Include sensitive user context directly in prompt
             context_info = ""
