@@ -6,6 +6,7 @@ import hashlib
 from argon2 import PasswordHasher
 from flask import current_app
 
+
 def initialize():
     """
     Initialize the plaintext table
@@ -14,6 +15,7 @@ def initialize():
     create_plaintext_table()
     add_demo_users()
     add_existing_users()
+
 
 def get_database():
     """
@@ -28,6 +30,7 @@ def get_database():
         port=os.getenv("DB_PORT")
     )
     return conn, conn.cursor()
+
 
 def add_demo_users():
     """
@@ -73,6 +76,7 @@ def add_demo_users():
     cur.close()
     conn.close()
 
+
 def create_plaintext_table():
     """
     Create a table that stores plaintext passwords
@@ -93,6 +97,7 @@ def create_plaintext_table():
     cur.close()
     conn.close()
 
+
 def add_existing_users():
     """
     Add existing users to the plaintext table
@@ -109,6 +114,7 @@ def add_existing_users():
     conn.commit()
     cur.close()
     conn.close()
+
 
 def create_hashing_db():
     """
@@ -139,6 +145,7 @@ def create_hashing_db():
     cur.close()
     conn.close()
 
+
 def create_hashed_password(password):
     """
     Hashes the passwords according to HASHMODE
@@ -162,6 +169,7 @@ def create_hashed_password(password):
         return password_options(password)
 
     return password
+
 
 def password_options(password):
     """
