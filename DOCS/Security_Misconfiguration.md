@@ -26,8 +26,6 @@ Allows attackers to forge session tokens and JWT tokens using easily guessable s
 **Setup:**
 1. Ensure Security Hardening is **disabled** (vulnerable mode) - this ensures weak secret keys are in use
 2. Create two test accounts (e.g., `attacker` and `victim`)
-3. Login as `victim` and note their account details
-4. Logout
 
 **Obtain Victim's Token Structure:**
 1. Login as `victim` at `http://localhost:5000/login`
@@ -75,9 +73,11 @@ Allows attackers to forge session tokens and JWT tokens using easily guessable s
 11. Replace with your forged token → Press Enter
 12. Refresh the page (F5)
 
-**Expected Result (Protected):** The forged token is rejected, the dashboard does NOT show victim's account information. Instead you will see an error upon refresh, because the token was signed with `secret123` but the server now uses a strong random secret. The same forgery steps that worked in the exploit no longer succeed.
+**Expected Result (Protected):** The forged token is rejected, the dashboard does NOT show victim's account information. Instead you will see an error upon refresh, because the forged token lacks an `exp` claim and hardened mode requires one. The same forgery steps that worked in the exploit no longer succeed.
 
 **Note on Token Expiration:** When hardening is enabled, tokens expire after 5 seconds (configured in `mitigations/session_exp.py`) for quick demonstration purposes. If you need tokens to last longer for extended testing, modify `timedelta(seconds=5)` to a longer duration in that file (e.g., `timedelta(hours=1)`).
+
+**Runtime Toggle Limitation:** The runtime toggle protects against forgery by requiring an `exp` claim — a forged token without `exp` is rejected. However, `JWT_SECRET` is fixed at startup (`secret123` by default), so a forged token that includes a valid `exp` and is signed with `secret123` would still be accepted in toggle-hardened mode. For full protection (different secret), set `JWT_SECRET_KEY` to a strong random value in `.env` and restart the application instead of using the toggle.
 
 ### Insecure Cookie Configuration
 
@@ -93,8 +93,8 @@ Session cookies lack security flags, exposing them to interception and XSS attac
 4. Go to Application tab → Storage → Cookies → `http://localhost:5000`
 5. Locate the `token` cookie in the list
 6. Examine the cookie properties columns:
-   - **Secure**: Should show false
-   - **HttpOnly**: Should show false
+   - **Secure**: Should be false or blank
+   - **HttpOnly**: Should be false or blank
    - **SameSite**: Shows "None" or blank (vulnerable to CSRF)
 7. Note the cookie value (your session token)
 
@@ -149,7 +149,7 @@ Session cookies lack security flags, exposing them to interception and XSS attac
 2. Log back in at `http://localhost:5000/login` to receive a new secure cookie
 3. Open DevTools (F12) → Application tab → Storage → Cookies → `http://localhost:5000`
 4. Examine the `token` cookie properties (corresponds to Method 1):
-   - **Secure**: Still false — expected on HTTP localhost, only set over HTTPS
+   - **Secure**: Still false or blank — expected on HTTP localhost, only set over HTTPS
    - **HttpOnly**: `True` (now set)
    - **SameSite**: `Strict` (now set)
 5. Open the Console tab and try accessing the cookie via JavaScript (corresponds to Method 2):
