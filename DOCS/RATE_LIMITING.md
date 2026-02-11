@@ -53,7 +53,7 @@ Note: For demo purposes, the correct 4-digit PIN is displayed on screen. Althoug
 2) Select Login, then navigate to "Forgot Password? Reset here" and select.
 3) Enter account username and proceed.
 4) The reset PIN appears. Copy this 4-digit PIN and select "Continue to Reset Password"
-5) Enter the username, a new password, and an incorrect pin, at leat 5 times.
+5) Enter the username, a new password, and an incorrect pin, at least 5 times.
 6) Once a message appears noting "Too many requests," send in the password reset again, but this time with the correct PIN.
 
 Users will observe that despite entering the correct PIN, rate limiting will have already blocked them, so they will be unable to reset the password for a set period of time.
