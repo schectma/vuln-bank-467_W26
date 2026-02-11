@@ -1,6 +1,7 @@
 # https://www.geeksforgeeks.org/python/how-to-hash-passwords-in-python/
 import psycopg2
 import os
+import random
 import hashlib
 import bcrypt
 from flask import current_app
@@ -140,6 +141,26 @@ def create_hashed_password(password):
         # SHA-256 Medium Hashing without salt
         return hashlib.sha256(password.encode()).hexdigest()
     elif mode == 3:
+        # bcrypt Strong Hashing, automatically salts
+        hpass = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
+        return hpass.decode()
+    elif mode == 4:
+        return password_options(password)
+
+    return password
+
+def password_options(password):
+    sel = random.choice([0, 1, 2, 3])
+
+    if sel == 0:
+        return password
+    elif sel == 1:
+        # SHA-1 Weak Hashing without salt
+        return hashlib.sha1(password.encode()).hexdigest()
+    elif sel == 2:
+        # SHA-256 Medium Hashing without salt
+        return hashlib.sha256(password.encode()).hexdigest()
+    elif sel == 3:
         # bcrypt Strong Hashing, automatically salts
         hpass = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
         return hpass.decode()

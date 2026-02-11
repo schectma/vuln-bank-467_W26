@@ -1051,7 +1051,7 @@ def hashing_toggle():
     currentHash = app.config.get("HASHMODE", 0)
     #hashing.create_hashing_db()
 
-    newHash = (currentHash + 1) % 4
+    newHash = (currentHash + 1) % 5
 
     app.config["HASHMODE"] = newHash
     # Creates hashed database
@@ -1075,35 +1075,14 @@ def get_hashmode():
         0: "None - Plaintext",
         1: "Weak - SHA-1",
         2: "Medium - SHA-256",
-        3: "Strong - bcrypt"
+        3: "Strong - bcrypt",
+        4: "Various Types"
     }
 
     return jsonify({
         'hashmode': currentHash,
         'modename': modeName.get(currentHash)
     })
-
-#@app.route('/api/db-hashing', methods=['POST'])
-#def hash_database():
-    # Gets the hashmode
-    # Creates users in the database for demo
-
-#    try:
-#        data = request.get_json()
-#        mode = int(data.get("mode", 0))
-#        if not (0 <= mode < 4):
-#            return jsonify({
-#            'status': 'Mode does not exist'}), 400
-#        else:
-#            # Make the database
-#            hashing.create_hashing_db()
-
-#    except Exception as e:
-#        print(f"Hashing database error: {str(e)}")
-#        return jsonify({
-#            'status': 'error',
-#            'message': str(e)
-#        }), 500
 
 # To view passwords for hashing demo
 @app.route('/api/hashed-passwords', methods=['GET'])
