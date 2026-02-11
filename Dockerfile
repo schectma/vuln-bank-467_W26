@@ -8,6 +8,8 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 COPY requirements.txt .
+# Tells Python to treat /app as importable module path
+ENV PYTHONPATH=/app
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Create necessary directories
