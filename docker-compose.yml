@@ -14,8 +14,13 @@ services:
       - DB_NAME=vulnerable_bank
       - DB_USER=postgres
       - DB_PASSWORD=postgres
-      - DB_HOST=db 
+      - DB_HOST=db
       - DB_PORT=5432
+      # Security Misconfiguration: set these to enable hardened mode
+      # Generate strong values: python3 -c "import secrets; print(secrets.token_hex(32))"
+      - SECURITY_HARDENING_ENABLED=false
+      - FLASK_SECRET_KEY=secret123
+      - JWT_SECRET_KEY=secret123
     depends_on:
       - db
     volumes:
