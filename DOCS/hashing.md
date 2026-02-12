@@ -21,7 +21,7 @@ There is a hashing toggle with multiple hashing modes available. The hashing mod
 .then(r=>r.json())
 .then(d=>console.log(d))`
 
-    ![alt text](./screenshots/hash_showmode.png)
+![alt text](./screenshots/hash_showmode.png)
 
 ### Passwords Stored in Plaintext (No Hashing)
 2. Set the toggle to 'Toggle Hashing: None'.
