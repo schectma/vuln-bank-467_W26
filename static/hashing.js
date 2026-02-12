@@ -3,7 +3,8 @@ const hashModes = [
     { label: "None",   color: "#b30000" }, // Plaintext
     { label: "Weak",   color: "#ff8c00" }, // Weak
     { label: "Medium", color: "#e6b800" }, // Medium
-    { label: "Strong", color: "#1f8b1f" }  // Strong
+    { label: "Strong", color: "#1f8b1f" },  // Strong
+    { label: "Various", color: "#007bff"} // Uses various hashing modes
 ];
 
 let hashMode = (typeof hashingData !== 'undefined') ? hashingData : 0;

@@ -18,10 +18,13 @@ from collections import defaultdict
 import requests
 from urllib.parse import urlparse
 import platform
+import psycopg2
 import secrets
 from mitigations import BOLA, MA
 from mitigations import sql_injections
 from mitigations import session_exp
+from mitigations import SSRF
+from mitigations import hashing
 
 # Load environment variables
 load_dotenv()
@@ -1350,7 +1353,7 @@ def harden_toggle():
     SECURITY_HARDENING_ENABLED = harden
 
     app.config["HARDENED"] = harden
-
+    
     # Update JWT secret in auth module to match hardened state
     if harden:
         # Use env var if it's strong enough, otherwise generate a random one
@@ -1366,6 +1369,103 @@ def harden_toggle():
         'status': 'success',
         'hardened': harden
     })
+
+@app.route('/api/toggle/hashing', methods=['POST'])
+def hashing_toggle():
+    """
+    Hashing toggle has 5 modes:
+    None - plaintext
+    Weak - SHA-1
+    Medium - SHA-256
+    Strong - Argon2id
+    Various - Uses random hashing techniques from above
+    """
+    currentHash = app.config.get("HASHMODE", 0)
+
+    newHash = (currentHash + 1) % 5
+
+    app.config["HASHMODE"] = newHash
+    # Creates hashed database
+    hashing.create_hashing_db()
+
+    return jsonify({
+        'status': 'success',
+        'hashmode': newHash
+    })
+
+@app.before_first_request
+def setup_hashing():
+    """
+    Adds hashing demo users to User table
+    Creates plaintext table backup (so can go between
+    hashing modes)
+    """
+    hashing.initialize()
+
+@app.route('/api/hashmode', methods=['GET'])
+def get_hashmode():
+    """
+    Retrieves the current hashmode
+    This is to help demo the hashing password mitigation
+    """
+    try:
+        currentHash = app.config.get("HASHMODE", 0)
+        modeName = {
+            0: "None - Plaintext",
+            1: "Weak - SHA-1",
+            2: "Medium - SHA-256",
+            3: "Strong - Argon2id",
+            4: "Various Types"
+        }
+
+        return jsonify({
+            'hashmode': currentHash,
+            'modename': modeName.get(currentHash)
+        })
+
+    except Exception as e:
+        print(f"Can't view hashmode: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
+@app.route('/api/hashed-passwords', methods=['GET'])
+def hashed_pass():
+    """
+    Allows the user to view the passwords for the
+    hashing demo
+    """
+    try:
+        conn = psycopg2.connect(
+        dbname=os.getenv("DB_NAME"),
+        user=os.getenv("DB_USER"),
+        password=os.getenv("DB_PASSWORD"),
+        host=os.getenv("DB_HOST"),
+        port=os.getenv("DB_PORT")
+        )
+
+        cur = conn.cursor()
+
+        cur.execute("""
+            SELECT username, password
+            FROM users
+        """)
+
+        rows = cur.fetchall()
+
+        cur.close()
+        conn.close()
+
+        return jsonify(rows)
+
+    except Exception as e:
+        print(f"Can't view passwords: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
 
 # Forgot password endpoint
 @app.route('/forgot-password', methods=['GET', 'POST'])
