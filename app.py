@@ -1362,6 +1362,8 @@ def harden_toggle():
     SECURITY_HARDENING_ENABLED = harden
 
     app.config["HARDENED"] = harden
+    rate_limit_storage.clear()
+
     
     # Update JWT secret in auth module to match hardened state
     if harden:
