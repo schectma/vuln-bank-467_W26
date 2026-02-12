@@ -78,10 +78,9 @@ Allows any origin to make cross-origin requests, exposing sensitive data.
 ##### Method 2: Via Browser Console (Quick Test)
 
 1. Ensure Security Hardening is **disabled** (vulnerable mode)
-2. Log into Vulnerable Bank at `http://localhost:5000/login`
-3. Open a completely different website (e.g., google.com) in a new tab
-4. Open browser console on that tab
-5. Execute:
+2. Open a completely different website (e.g., google.com) in a new tab
+3. Open browser console on that tab
+4. Execute:
    ```javascript
    fetch('http://localhost:5000/api/security-config')
        .then(r => r.json())
