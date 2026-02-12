@@ -4,18 +4,19 @@ This app stores passwords in plaintext which is a vulnerability that can lead to
 
 ## Prerequisites
 - Access the web app through a browser
-``
+
 ## Demonstrations
 There is a hashing toggle with multiple hashing modes available. The hashing modes are:
 
-None: Plaintext
-Weak: SHA-1
-Medium: SHA-256
-Strong: Argon2id
-Various: Combination of all of the above
+- None: Plaintext
+- Weak: SHA-1
+- Medium: SHA-256
+- Strong: Argon2id
+- Various: Combination of all of the above
 
 ### View mode
 1. The hashing mode is stated on the toggle button. It can also be viewed from the console window with this command:
+
 `fetch('/api/hashmode')
 .then(r=>r.json())
 .then(d=>console.log(d))`
@@ -25,6 +26,7 @@ Various: Combination of all of the above
 ### Passwords Stored in Plaintext (No Hashing)
 2. Set the toggle to 'Toggle Hashing: None'.
 3. Open the browser console and put in the following command:
+
 `fetch('/api/hashed-passwords')
 .then(r=>r.json())
 .then(d=>console.log(d))`
