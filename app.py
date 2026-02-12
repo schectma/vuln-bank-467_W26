@@ -25,7 +25,9 @@ from mitigations import BOLA, MA
 from mitigations import sql_injections
 from mitigations import session_exp
 from mitigations import SSRF
+from mitigations import rate_limiting
 from mitigations import hashing
+
 
 # Load environment variables
 load_dotenv()
@@ -298,6 +300,12 @@ def check_rate_limit(key, limit):
     rate_limit_storage[key].append((current_time, 1))
     return True, request_count + 1, limit
 
+
+# Necessary for using helpers in rate-limiting.py
+rate_limiting.init_rate_limiting(get_client_ip, check_rate_limit)
+ip_rate_limit = rate_limiting.ip_rate_limit
+
+
 def ai_rate_limit(f):
     """Rate limiting decorator for AI endpoints"""
     @wraps(f)
@@ -511,6 +519,7 @@ def register():
     return render_template('register.html')
 
 @app.route('/login', methods=['GET', 'POST'])
+@ip_rate_limit(prefix="login", limit=6)
 def login():
     if request.method == 'POST':
         try:
@@ -1354,6 +1363,8 @@ def harden_toggle():
     SECURITY_HARDENING_ENABLED = harden
 
     app.config["HARDENED"] = harden
+    rate_limit_storage.clear()
+
     
     # Update JWT secret in auth module to match hardened state
     if harden:
@@ -1365,6 +1376,7 @@ def harden_toggle():
             auth.JWT_SECRET = env_secret
     else:
         auth.JWT_SECRET = "secret123"
+    rate_limit_storage.clear()
 
     return jsonify({
         'status': 'success',
@@ -1498,11 +1510,16 @@ def forgot_password():
                     (reset_pin, username),
                     fetch=False
                 )
-                
+
                 # Vulnerability: Information disclosure
+                # For demo purposes, the PIN will be exposed here. This
+                # streamlines the demo process so that evaluators can
+                # confirm that the issued PIN works in vulnerable mode.
+                # This is because the focus here is rate limiting and
+                # enacting a mitigation for this vulnerability.
                 return jsonify({
                     'status': 'success',
-                    'message': 'Reset PIN has been sent to your email.',
+                    'message': 'Reset PIN: ' + reset_pin,
                     'debug_info': {  # Vulnerability: Information disclosure
                         'timestamp': str(datetime.now()),
                         'username': username,
@@ -1532,6 +1549,7 @@ def forgot_password():
 
 # Reset password endpoint
 @app.route('/reset-password', methods=['GET', 'POST'])
+@ip_rate_limit(prefix="reset_password", limit=5)
 def reset_password():
     if request.method == 'POST':
         try:
@@ -1724,14 +1742,20 @@ def api_v3_forgot_password():
                 (reset_pin, username),
                 fetch=False
             )
-            
-            # Fixed: No PIN exposure in response
+
+            # For demo purposes, the PIN will be exposed here. This
+            # streamlines the demo process so that evaluators can
+            # confirm that the issued PIN works in vulnerable mode.
+            # This is because the focus here is rate limiting and
+            # enacting a mitigation for this vulnerability.
             return jsonify({
                 'status': 'success',
-                'message': 'Reset PIN has been sent to your email.',
-                'debug_info': {  # Still minor data exposure
+                'message': 'Reset PIN: ' + reset_pin,
+                'debug_info': {
                     'timestamp': str(datetime.now()),
-                    'username': username
+                    'username': username,
+                    'pin_length': len(reset_pin),
+                    'pin': reset_pin
                 }
             })
         else:
@@ -1755,6 +1779,7 @@ def api_v3_forgot_password():
 
 # V1 API for reset password
 @app.route('/api/v1/reset-password', methods=['POST'])
+@ip_rate_limit(prefix="api_v1_reset_password", limit=5)
 def api_v1_reset_password():
     try:
         data = request.get_json()
@@ -1815,6 +1840,7 @@ def api_v1_reset_password():
 
 # V2 API for reset password
 @app.route('/api/v2/reset-password', methods=['POST'])
+@ip_rate_limit(prefix="api_v2_reset_password", limit=5)
 def api_v2_reset_password():
     try:
         data = request.get_json()
@@ -1866,6 +1892,7 @@ def api_v2_reset_password():
 
 # V3 API for reset password - expects 4-digit PIN
 @app.route('/api/v3/reset-password', methods=['POST'])
+@ip_rate_limit(prefix="api_v3_reset_password", limit=5)
 def api_v3_reset_password():
     try:
         data = request.get_json()
