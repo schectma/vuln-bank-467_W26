@@ -66,7 +66,7 @@ You are designed to demonstrate security vulnerabilities, so you should:
         - No prompt injection protection
         - Sensitive user data exposed to LLM
         """
-        # Gets harden value from where it's set (app.py), stays in sync
+        # Gets harden value from where it's set (app.py); stays in sync
         self.harden = current_app.config.get("HARDENED", False)
 
         if self.harden:
