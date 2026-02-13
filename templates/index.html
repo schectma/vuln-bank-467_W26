@@ -54,6 +54,26 @@
         .nav-links a:hover {
             opacity: 0.8;
         }
+
+        .hashingToggle {
+            color: white !important;
+            text-decoration: none;
+            padding: 8px 14px;
+            border-radius: 999px;
+            margin-left: 1.5rem;
+            font-weight: 500;
+            transition: opacity 0.2s;
+        }
+
+        .vulnToggle {
+            color: white !important;
+            text-decoration: none;
+            padding: 8px 14px;
+            border-radius: 999px;
+            margin-left: 1.5rem;
+            font-weight: 500;
+            transition: opacity 0.2s;
+        }
         
         .hero {
             flex-grow: 1;
@@ -786,12 +806,26 @@
                 <nav class="nav-links">
                     <!-- <a href="{{ url_for('login') }}">Sign In</a> -->
                     <!-- <a href="{{ url_for('register') }}">Sign Up</a> -->
-                    <!--Toggle button (just for demo as of 1/21/26)-->
+                    <!--Toggle button (just for demo as of 1/21/26)
                     <a id="mitigationToggle"
                         href="#"
                         onclick="toggleVulnerabilities(event)"
                         style="color: yellow; text-shadow: -1px -1px 0 black, 1px -1px 0 black, -1px 1px 0 black, 1px 1px 0 black, -1px 0 0 black, 1px 0 0 black, 0 -1px 0 black, 0 1px 0 black;">
                         Toggle Vulnerabilities
+                    </a> -->
+                    <a id="vulnToggle"
+                        href="#"
+                        onclick="toggleVulnerabilities(event)"
+                        class="vulnToggle"
+                        style="background-color: {{ '#1f8b1f' if hardened else '#b30000' }};">
+                        Toggle Vulnerabilities
+                    </a>
+                    <!--Hashing toggle (to discuss with teammates)-->
+                    <a id="hashingToggle"
+                        href="#"
+                        onclick="toggleHashing(event)"
+                        class="hashingToggle">
+                        Toggle Hashing
                     </a>
                     <a href="https://github.com/Commando-X/vuln-bank?tab=readme-ov-file#testing-guide-" target="_blank">Guide</a>
                     <a href="/api/docs"> API Docs</a>
@@ -1149,20 +1183,22 @@
         // Toggle logic for button
         let hardened = null;
 
+        function updateVulnUI() {
+            const btn = document.getElementById("vulnToggle");
+            btn.style.backgroundColor = hardened ? "#1f8b1f" : "#b30000";
+        }
+
         async function toggleVulnerabilities(e) {
             e.preventDefault();
 
             try {
                 const res = await fetch('/api/toggle/harden', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    }
-
+                    method: 'POST'
                 });
                 const data = await res.json();
                 if (data.status === 'success') {
                     hardened = !!data.hardened;
+                    updateVulnUI();
                     alert(`Hardened mode: ${hardened ? 'ON' : 'OFF'}`);
                 } else {
                     alert(data.message || 'Toggle failed');
@@ -1171,8 +1207,16 @@
                 console.error(err);
                 alert('Error toggling vulnerabilities');
             }
-        }       
+        }
+
     </script>
+
+    <script type="text/javascript">
+        // Assign jinja2 data to variable
+        const hashingData = {{ hashmode | tojson | safe }};
+    </script>
+
+    <script type="text/javascript" src="{{ url_for('static', filename='hashing.js') }}"></script>
 
 </body>
 </html>
