@@ -7,7 +7,7 @@ import os
 from dotenv import load_dotenv
 from auth import generate_token, token_required, verify_token, init_auth_routes
 import auth
-from werkzeug.utils import secure_filename 
+from werkzeug.utils import secure_filename  
 from flask_swagger_ui import get_swaggerui_blueprint
 from flask_cors import CORS
 from database import init_connection_pool, init_db, execute_query, execute_transaction
@@ -54,6 +54,9 @@ app.secret_key = "secret123"
 harden = False
 
 app.config["HARDENED"] = harden
+
+# Hashing feature flag
+app.config["HASHMODE"] = 0
 
 # Rate limiting configuration
 RATE_LIMIT_WINDOW = 3 * 60 * 60  # 3 hours in seconds
@@ -198,7 +201,10 @@ def generate_cvv():
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    #return render_template('index.html')
+    vulnState = app.config.get("HARDENED", False)
+    hashState = app.config.get("HASHMODE", 0)
+    return render_template('index.html', hardened=vulnState, hashmode=hashState)
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
