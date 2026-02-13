@@ -83,9 +83,6 @@ INFORMATION_DISCLOSURE_PROTECTION = os.getenv('INFORMATION_DISCLOSURE_PROTECTION
 # Mass Assignment Protection
 MASS_ASSIGNMENT_PROTECTION = os.getenv('MASS_ASSIGNMENT_PROTECTION', 'false').lower() == 'true'
 
-# Server-Side Request Forgery (SSRF) Protection
-SSRF_PROTECTION = os.getenv('SSRF_PROTECTION', 'false').lower() == 'true'
-
 # Password Hashing
 PASSWORD_HASHING_ENABLED = os.getenv('PASSWORD_HASHING_ENABLED', 'false').lower() == 'true'
 
@@ -2737,7 +2734,6 @@ def security_config():
             'authorization_enabled': True,
             'information_disclosure_protection': True,
             'mass_assignment_protection': True,
-            'ssrf_protection': True,
             'password_hashing_enabled': True,
             'file_upload_validation': True,
             'ai_prompt_injection_protection': True
@@ -2751,7 +2747,6 @@ def security_config():
         'authorization_enabled': AUTHORIZATION_ENABLED,
         'information_disclosure_protection': INFORMATION_DISCLOSURE_PROTECTION,
         'mass_assignment_protection': MASS_ASSIGNMENT_PROTECTION,
-        'ssrf_protection': SSRF_PROTECTION,
         'password_hashing_enabled': PASSWORD_HASHING_ENABLED,
         'file_upload_validation': FILE_UPLOAD_VALIDATION,
         'ai_prompt_injection_protection': AI_PROMPT_INJECTION_PROTECTION
