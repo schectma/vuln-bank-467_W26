@@ -1,5 +1,5 @@
-import mitigations.BOLA as BOLA
 from helper import toggle_harden
+
 
 def test_check_balance_bola_hardened(client, setup_test_db):
     """Verify that attempt to check balance of another user fails."""
