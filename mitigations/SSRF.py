@@ -27,7 +27,7 @@ def fetch_and_store_image(image_url: str, upload_folder: str) -> tuple[str, str]
 
     if not resp.ok or not resp.headers.get("Content-Type", "").startswith("image/"):
         raise ValueError("Invalid image URL or response")
-    
+
     # Generate filename and save
     filename = f"{random.randint(1, 1000000)}_{os.path.basename(urlparse(image_url).path) or 'downloaded'}"
     file_path = os.path.join(upload_folder, filename)
