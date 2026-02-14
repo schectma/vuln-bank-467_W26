@@ -1,11 +1,10 @@
 import os
 import random
-import ipaddress
 from urllib.parse import urlparse
-from werkzeug.utils import secure_filename
 import requests
 
 ALLOWED_IMAGE_HOSTS = {"oregonstate.edu"}  # adjust to your allowlist
+
 
 def _is_allowed_url(image_url: str) -> bool:
     parsed = urlparse(image_url)
