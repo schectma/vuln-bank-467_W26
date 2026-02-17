@@ -20,11 +20,13 @@ from urllib.parse import urlparse
 import platform
 import psycopg2
 import secrets
-from mitigations import BOLA, MA
+from mitigations import BOLA, MA, SSRF
 from mitigations import sql_injections
 from mitigations import session_exp
 from mitigations import SSRF
+from mitigations import rate_limiting
 from mitigations import hashing
+
 
 # Load environment variables
 load_dotenv()
@@ -297,6 +299,12 @@ def check_rate_limit(key, limit):
     rate_limit_storage[key].append((current_time, 1))
     return True, request_count + 1, limit
 
+
+# Necessary for using helpers in rate-limiting.py
+rate_limiting.init_rate_limiting(get_client_ip, check_rate_limit)
+ip_rate_limit = rate_limiting.ip_rate_limit
+
+
 def ai_rate_limit(f):
     """Rate limiting decorator for AI endpoints"""
     @wraps(f)
@@ -510,6 +518,7 @@ def register():
     return render_template('register.html')
 
 @app.route('/login', methods=['GET', 'POST'])
+@ip_rate_limit(prefix="login", limit=6)
 def login():
     if request.method == 'POST':
         try:
@@ -903,57 +912,28 @@ def upload_profile_picture_url(current_user):
         if not image_url:
             return jsonify({'status': 'error', 'message': 'image_url is required'}), 400
 
-        # SSRF Protection Toggle
-        if SSRF_PROTECTION:
-            # Protected: Validate URL scheme and block private/internal addresses
-            parsed = urlparse(image_url)
-
-            # Only allow http/https
-            if parsed.scheme not in ['http', 'https']:
-                return jsonify({
-                    'status': 'error',
-                    'message': 'Only http and https protocols are allowed'
-                }), 400
-
-            # Block private IP ranges and localhost
-            hostname = parsed.hostname
-            if not hostname:
-                return jsonify({'status': 'error', 'message': 'Invalid URL'}), 400
-
-            # Block common internal/metadata endpoints
-            blocked_patterns = [
-                'localhost', '127.0.0.1', '0.0.0.0',
-                '169.254.169.254',  # AWS metadata
-                '::1',  # IPv6 localhost
-                '10.', '172.16.', '192.168.',  # Private IP ranges
-                'metadata.google.internal'  # GCP metadata
-            ]
-
-            if any(hostname.startswith(pattern) or hostname == pattern.rstrip('.') for pattern in blocked_patterns):
-                return jsonify({
-                    'status': 'error',
-                    'message': 'Access to internal/private addresses is not allowed'
-                }), 403
-
-            # Protected: Enable SSL verification, don't follow redirects
-            resp = requests.get(image_url, timeout=10, allow_redirects=False, verify=True)
+        if harden:
+            filename, file_path = SSRF.fetch_and_store_image(image_url, UPLOAD_FOLDER)
         else:
-            # Vulnerable: No URL validation, SSL verification disabled, follows redirects
-            # Allows SSRF attacks to access internal services, cloud metadata, etc.
+            # Vulnerabilities:
+            # - No URL scheme/host allowlist (SSRF)
+            # - SSL verification disabled
+            # - Follows redirects
+            # - No content-type or size validation
             resp = requests.get(image_url, timeout=10, allow_redirects=True, verify=False)
-        if resp.status_code >= 400:
-            return jsonify({'status': 'error', 'message': f'Failed to fetch URL: HTTP {resp.status_code}'}), 400
+            if resp.status_code >= 400:
+                return jsonify({'status': 'error', 'message': f'Failed to fetch URL: HTTP {resp.status_code}'}), 400
 
-        # Derive filename from URL path (user-controlled)
-        parsed = urlparse(image_url)
-        basename = os.path.basename(parsed.path) or 'downloaded'
-        filename = secure_filename(basename)
-        filename = f"{random.randint(1, 1000000)}_{filename}"
-        file_path = os.path.join(UPLOAD_FOLDER, filename)
+            # Derive filename from URL path (user-controlled)
+            parsed = urlparse(image_url)
+            basename = os.path.basename(parsed.path) or 'downloaded'
+            filename = secure_filename(basename)
+            filename = f"{random.randint(1, 1000000)}_{filename}"
+            file_path = os.path.join(UPLOAD_FOLDER, filename)
 
-        # Save content directly without validation
-        with open(file_path, 'wb') as f:
-            f.write(resp.content)
+            # Save content directly without validation
+            with open(file_path, 'wb') as f:
+                f.write(resp.content)
 
         # Store just the filename in DB (same pattern as file upload)
         execute_query(
@@ -968,20 +948,16 @@ def upload_profile_picture_url(current_user):
             'file_path': os.path.join('static/uploads', filename),
             'debug_info': {  # Information disclosure for learning
                 'fetched_url': image_url,
-                'http_status': resp.status_code,
-                'content_length': len(resp.content)
+                'http_status': resp.status_code if not harden else 200,
+                'content_length': len(resp.content) if not harden else None
             }
         })
     except Exception as e:
         print(f"URL image import error: {str(e)}")
-        return format_error_response(
-            e,
-            500,
-            include_debug={
-                'endpoint': 'upload_profile_picture_url',
-                'error_details': str(e)
-            }
-        )
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
 
 # INTERNAL-ONLY ENDPOINTS FOR SSRF DEMO (INTENTIONALLY SENSITIVE)
 def _is_loopback_request():
@@ -1353,6 +1329,8 @@ def harden_toggle():
     SECURITY_HARDENING_ENABLED = harden
 
     app.config["HARDENED"] = harden
+    rate_limit_storage.clear()
+
     
     # Update JWT secret in auth module to match hardened state
     if harden:
@@ -1364,6 +1342,7 @@ def harden_toggle():
             auth.JWT_SECRET = env_secret
     else:
         auth.JWT_SECRET = "secret123"
+    rate_limit_storage.clear()
 
     return jsonify({
         'status': 'success',
@@ -1497,11 +1476,16 @@ def forgot_password():
                     (reset_pin, username),
                     fetch=False
                 )
-                
+
                 # Vulnerability: Information disclosure
+                # For demo purposes, the PIN will be exposed here. This
+                # streamlines the demo process so that evaluators can
+                # confirm that the issued PIN works in vulnerable mode.
+                # This is because the focus here is rate limiting and
+                # enacting a mitigation for this vulnerability.
                 return jsonify({
                     'status': 'success',
-                    'message': 'Reset PIN has been sent to your email.',
+                    'message': 'Reset PIN: ' + reset_pin,
                     'debug_info': {  # Vulnerability: Information disclosure
                         'timestamp': str(datetime.now()),
                         'username': username,
@@ -1531,6 +1515,7 @@ def forgot_password():
 
 # Reset password endpoint
 @app.route('/reset-password', methods=['GET', 'POST'])
+@ip_rate_limit(prefix="reset_password", limit=5)
 def reset_password():
     if request.method == 'POST':
         try:
@@ -1723,14 +1708,20 @@ def api_v3_forgot_password():
                 (reset_pin, username),
                 fetch=False
             )
-            
-            # Fixed: No PIN exposure in response
+
+            # For demo purposes, the PIN will be exposed here. This
+            # streamlines the demo process so that evaluators can
+            # confirm that the issued PIN works in vulnerable mode.
+            # This is because the focus here is rate limiting and
+            # enacting a mitigation for this vulnerability.
             return jsonify({
                 'status': 'success',
-                'message': 'Reset PIN has been sent to your email.',
-                'debug_info': {  # Still minor data exposure
+                'message': 'Reset PIN: ' + reset_pin,
+                'debug_info': {
                     'timestamp': str(datetime.now()),
-                    'username': username
+                    'username': username,
+                    'pin_length': len(reset_pin),
+                    'pin': reset_pin
                 }
             })
         else:
@@ -1754,6 +1745,7 @@ def api_v3_forgot_password():
 
 # V1 API for reset password
 @app.route('/api/v1/reset-password', methods=['POST'])
+@ip_rate_limit(prefix="api_v1_reset_password", limit=5)
 def api_v1_reset_password():
     try:
         data = request.get_json()
@@ -1814,6 +1806,7 @@ def api_v1_reset_password():
 
 # V2 API for reset password
 @app.route('/api/v2/reset-password', methods=['POST'])
+@ip_rate_limit(prefix="api_v2_reset_password", limit=5)
 def api_v2_reset_password():
     try:
         data = request.get_json()
@@ -1865,6 +1858,7 @@ def api_v2_reset_password():
 
 # V3 API for reset password - expects 4-digit PIN
 @app.route('/api/v3/reset-password', methods=['POST'])
+@ip_rate_limit(prefix="api_v3_reset_password", limit=5)
 def api_v3_reset_password():
     try:
         data = request.get_json()

@@ -12,8 +12,9 @@ Security misconfiguration occurs when security settings are defined, implemented
 
 **Runtime Toggle (Recommended for Testing)**
 
-Use the Security Hardening toggle on the dashboard at `http://localhost:5000/dashboard` to switch between vulnerable and hardened modes without restarting the application.
+Use the Security Hardening toggle on the dashboard at `http://localhost:5000/dashboard` or the **Toggle Vulnerabilities** button on the homepage at `http://localhost:5000/` to switch between vulnerable and hardened modes without restarting the application.
 
+---
 
 ### Weak Secret Keys
 
@@ -79,6 +80,50 @@ Allows attackers to forge session tokens and JWT tokens using easily guessable s
 
 **Runtime Toggle Limitation:** The runtime toggle protects against forgery by requiring an `exp` claim — a forged token without `exp` is rejected. However, `JWT_SECRET` is fixed at startup (`secret123` by default), so a forged token that includes a valid `exp` and is signed with `secret123` would still be accepted in toggle-hardened mode. For full protection (different secret), set `JWT_SECRET_KEY` to a strong random value in `.env` and restart the application instead of using the toggle.
 
+---
+
+### Missing Security Headers
+
+Exposes application to clickjacking, MIME-type sniffing, and other attacks.
+
+#### Exploit
+
+1. Ensure Security Hardening is **disabled** (vulnerable mode)
+2. Log in to your account at `http://localhost:5000/login`
+3. Press F12 to open browser DevTools
+4. Click the **Network** tab at the top of the DevTools panel
+5. Refresh the page (F5) — a list of network requests will appear
+6. Click on the first request in the list (usually named `dashboard`)
+7. In the detail panel that opens, look for a **Headers** sub-tab and click it
+8. Scroll down to the **Response Headers** section
+9. Look for the following headers — they should all be **missing**:
+   - `Strict-Transport-Security`
+   - `X-Content-Type-Options`
+   - `X-Frame-Options`
+   - `X-XSS-Protection`
+
+**Expected Result (Vulnerable):** None of the four security headers appear in the Response Headers. The server is not sending any protections against clickjacking, MIME-sniffing, or other browser-level attacks.
+
+#### Mitigate
+
+**Using Runtime Toggle**
+1. Log out of the application
+2. Go to `http://localhost:5000/` and click the **Toggle Vulnerabilities** button
+3. Log back in at `http://localhost:5000/login`
+4. Press F12 to open browser DevTools → click the **Network** tab
+5. Refresh the page (F5)
+6. Click on the first request in the list (usually named `dashboard`)
+7. Click the **Headers** sub-tab → scroll down to **Response Headers**
+8. Look for the same four headers, they should now be **present**
+
+**Expected Result (Protected):** Response includes security headers:
+- `Strict-Transport-Security: max-age=31536000; includeSubDomains` - Forces HTTPS
+- `X-Content-Type-Options: nosniff` - Prevents MIME-type sniffing
+- `X-Frame-Options: DENY` - Prevents clickjacking
+- `X-XSS-Protection: 1; mode=block` - Enables browser XSS filter
+
+---
+
 ### Insecure Cookie Configuration
 
 Session cookies lack security flags, exposing them to interception and XSS attacks.
@@ -103,45 +148,6 @@ Session cookies lack security flags, exposing them to interception and XSS attac
 - Theft via XSS attacks
 - CSRF attacks from malicious sites
 
-##### Method 2: Accessing Cookie via JavaScript (Demonstrates HttpOnly Risk)
-
-1. Ensure Security Hardening is **disabled** (vulnerable mode)
-2. Remain logged in
-3. Open browser console (F12 → Console)
-4. Execute:
-   ```javascript
-   // This should work if HttpOnly is disabled
-   console.log('All cookies:', document.cookie);
-
-   // Extract just the token
-   const cookies = document.cookie.split('; ');
-   const tokenCookie = cookies.find(c => c.startsWith('token='));
-   if (tokenCookie) {
-       console.log('Session token accessible via JS:', tokenCookie);
-       console.log('This token can be stolen by XSS attacks!');
-   }
-   ```
-
-**Expected Result (Vulnerable):** Console displays the session token. An XSS attack could execute similar code to steal the token
-
-##### Method 3: Demonstrating Missing Secure Flag
-
-1. Ensure Security Hardening is **disabled** (vulnerable mode)
-2. Note that the application is running on `http://localhost:5000` (not HTTPS)
-3. The session cookie is transmitted in clear text over HTTP
-4. Execute in console to see request headers:
-   ```javascript
-   fetch('/api/security-config', {
-       credentials: 'include'
-   })
-   .then(r => {
-       console.log('Cookie sent over HTTP - visible to network sniffers');
-       return r.json();
-   });
-   ```
-
-**Expected Result (Vulnerable):** Cookie transmitted without encryption. Network sniffers (like Wireshark) can capture the session token in plaintext.
-
 #### Mitigate
 
 **Option 1: Using Runtime Toggle (Recommended)**
@@ -152,14 +158,129 @@ Session cookies lack security flags, exposing them to interception and XSS attac
    - **Secure**: Still false or blank — expected on HTTP localhost, only set over HTTPS
    - **HttpOnly**: `True` (now set)
    - **SameSite**: `Strict` (now set)
-5. Open the Console tab and try accessing the cookie via JavaScript (corresponds to Method 2):
+5
+
+**Expected Result (Protected):**
+- **DevTools:** HttpOnly and SameSite flags are now set. Secure remains false on HTTP localhost but would be set over HTTPS.
+---
+
+### Permissive CORS Policy
+
+Allows any origin to make cross-origin requests, exposing sensitive data.
+
+#### Exploit
+
+##### Method 1: Malicious HTML Page Attack
+
+1. Ensure Security Hardening is **disabled** (vulnerable mode)
+2. Open the included `attack.html` file by double-clicking it (located in the project root)
+   - The file opens with `file://` origin (simulating a malicious website)
+   - It provides two attack buttons with visual feedback
+3. Click "Launch Attack on /api/security-config"
+4. Click "Launch Attack on /check_balance/ACC1001"
+
+**Expected Result (Vulnerable):** Both attacks show red "ATTACK SUCCEEDED" boxes. Attack 1 displays the full security configuration JSON stolen from the server. Attack 2 returns a response from the balance endpoint — the important thing is that the cross-origin request was **not blocked**. The server responded with `Access-Control-Allow-Origin: *`, which means any website can read the response.
+
+##### Method 2: Via Browser Console (Quick Test)
+
+1. Ensure Security Hardening is **disabled** (vulnerable mode)
+2. Open a completely different website (e.g., google.com) in a new tab
+3. Open browser console on that tab
+4. Execute:
    ```javascript
-   const cookie = document.cookie;
-   if (cookie && cookie.includes('token=')) {
-       console.log('Token stolen:', cookie);
-   } else {
-       console.log('Access denied, HttpOnly flag prevents JavaScript from reading the token cookie');
-   }
+   fetch('http://localhost:5000/api/security-config')
+       .then(r => r.json())
+       .then(data => console.log('Cross-origin data stolen:', data))
+       .catch(e => console.log('Blocked by CORS:', e));
+   ```
+
+**Expected Result (Vulnerable):** The console prints the stolen security configuration JSON. This request originated from a completely different domain yet the server accepted it and returned readable data.
+
+#### Mitigate
+
+**Option 1: Using Runtime Toggle**
+1. Go to `http://localhost:5000`
+2. Click the **Toggle Vulnerabilities** button
+3. Open `attack.html` and click both attack buttons
+
+**Option 2: Using Environment Variables (Persistent)**
+1. Update `.env` file:
+   ```
+   SECURITY_HARDENING_ENABLED=true
+   ALLOWED_CORS_ORIGINS=http://localhost:5000,http://127.0.0.1:5000
+   ```
+2. Restart the application:
+   - Docker: `docker-compose down -v --remove-orphans && docker-compose up -d --build`
+   - Local: Stop and run `python app.py`
+3. Open `attack.html` and click both attack buttons
+
+**Expected Result (Protected):** Both attacks show green "ATTACK BLOCKED BY CORS!" boxes. The browser blocks the `attack.html` page (which runs from the `file://` origin) from reading any response.
+
+---
+
+### Debug Mode in Production
+
+Exposes detailed error messages and debug endpoints with sensitive information.
+
+#### Exploit
+
+##### Method 1: Accessing Debug Endpoint
+
+1. Ensure Security Hardening is **disabled** (vulnerable mode)
+2. In your browser address bar, navigate to:
+   ```
+   http://localhost:5000/debug/users
+   ```
+3. Observe exposed debug information including:
+   - Complete list of all users in the database
+   - User IDs and usernames
+   - Account numbers
+   - **Plain text passwords**
+   - Admin status flags
+
+**Expected Result (Vulnerable):** Debug endpoint returns JSON with all user records including sensitive data:
+```json
+{
+  "users": [
+    {
+      "account_number": "ADMIN001",
+      "id": 1,
+      "is_admin": true,
+      "password": "admin123",
+      "username": "admin"
+    }
+  ]
+}
+```
+
+##### Method 2: Triggering Detailed Error Messages
+
+1. Log in as any user.
+2. Open browser console (F12 → Console)
+3. Execute an intentionally malformed API request:
+   ```javascript
+   fetch('/api/bill-payments/create', {
+       method: 'POST',
+       headers: {
+           'Content-Type': 'application/json',
+           'Authorization': 'Bearer ' + localStorage.getItem('jwt_token')
+       },
+       body: JSON.stringify({biller_id: 999999, amount: -100})
+   })
+   .then(r => r.json())
+   .then(data => console.log('ERROR:', JSON.stringify(data, null, 2)));
+   ```
+
+**Expected Result (Vulnerable):** The console shows a `500 INTERNAL SERVER ERROR` with detailed diagnostic information revealing internal application structure including database constraint details, exception class names, and endpoint information.
+
+#### Mitigate
+
+**Option 1: Using Runtime Toggle (Recommended)**
+1. Go to `http://localhost:5000/`
+2. Click the **Toggle Vulnerabilities** button
+3. Try accessing the debug endpoint:
+   ```
+   http://localhost:5000/debug/users
    ```
 
 **Option 2: Using Environment Variables**
@@ -168,12 +289,10 @@ Session cookies lack security flags, exposing them to interception and XSS attac
    SECURITY_HARDENING_ENABLED=true
    ```
 2. Restart the application:
-   - Docker: `docker-compose down && docker-compose up -d`
+   - Docker: `docker-compose down -v --remove-orphans && docker-compose up -d --build`
    - Local: Stop server (Ctrl+C) and run `python app.py`
-3. Log out and log in again (to get a new secure cookie)
-4. Follow steps 3-5 from Option 1
+3. Try accessing the debug endpoint
 
 **Expected Result (Protected):**
-- **DevTools (Method 1):** HttpOnly and SameSite flags are now set. Secure remains false on HTTP localhost but would be set over HTTPS.
-- **Console (Method 2):** Prints "Access denied" — the token cookie is no longer accessible via `document.cookie` because HttpOnly is set.
-- **Method 3:** Cookie is still sent over HTTP on localhost, but in a production HTTPS deployment the Secure flag would prevent transmission over unencrypted connections.
+- Debug endpoint returns `{"status": "error", "message": "Not found"}` with 404 status
+- Error responses contain only generic messages without revealing internal details
