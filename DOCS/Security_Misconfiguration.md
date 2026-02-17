@@ -12,7 +12,7 @@ Security misconfiguration occurs when security settings are defined, implemented
 
 **Runtime Toggle (Recommended for Testing)**
 
-Use the Security Hardening toggle on the dashboard at `http://localhost:5000/dashboard` or the **Toggle Vulnerabilities** button on the homepage at `http://localhost:5000/` to switch between vulnerable and hardened modes without restarting the application.
+Use the **Toggle Vulnerabilities** button on the homepage at `http://localhost:5000/` to switch between vulnerable and hardened modes without restarting the application.
 
 ---
 
@@ -76,7 +76,7 @@ Allows attackers to forge session tokens and JWT tokens using easily guessable s
 
 **Expected Result (Protected):** The forged token is rejected, the dashboard does NOT show victim's account information. Instead you will see an error upon refresh, because the forged token lacks an `exp` claim and hardened mode requires one. The same forgery steps that worked in the exploit no longer succeed.
 
-**Note on Token Expiration:** When hardening is enabled, tokens expire after 5 seconds (configured in `mitigations/session_exp.py`) for quick demonstration purposes. If you need tokens to last longer for extended testing, modify `timedelta(seconds=5)` to a longer duration in that file (e.g., `timedelta(hours=1)`).
+**Note on Token Expiration:** When hardening is enabled, tokens expire after 30 seconds (configured in `mitigations/session_exp.py`) for quick demonstration purposes. If you need tokens to last longer for extended testing, modify `timedelta(seconds=30)` to a longer duration in that file (e.g., `timedelta(hours=1)`).
 
 **Runtime Toggle Limitation:** The runtime toggle protects against forgery by requiring an `exp` claim — a forged token without `exp` is rejected. However, `JWT_SECRET` is fixed at startup (`secret123` by default), so a forged token that includes a valid `exp` and is signed with `secret123` would still be accepted in toggle-hardened mode. For full protection (different secret), set `JWT_SECRET_KEY` to a strong random value in `.env` and restart the application instead of using the toggle.
 
@@ -158,7 +158,6 @@ Session cookies lack security flags, exposing them to interception and XSS attac
    - **Secure**: Still false or blank — expected on HTTP localhost, only set over HTTPS
    - **HttpOnly**: `True` (now set)
    - **SameSite**: `Strict` (now set)
-5
 
 **Expected Result (Protected):**
 - **DevTools:** HttpOnly and SameSite flags are now set. Secure remains false on HTTP localhost but would be set over HTTPS.
