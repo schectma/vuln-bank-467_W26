@@ -120,3 +120,24 @@ def setup_test_db():
     yield
 
     app_module.harden = False
+
+@pytest.fixture
+def user_exists():
+    """
+    Helper function to tests if user exists
+    This is to help with testing SQL injections
+    """
+    def _user_exists(username):
+        conn = psycopg2.connect(os.getenv("TEST_DATABASE_URL"))
+        cur = conn.cursor()
+
+        cur.execute("SELECT 1 FROM users WHERE username = %s;", (username,))
+        exists = cur.fetchone() is not None
+
+        cur.close()
+        conn.close()
+
+        return exists
+
+    return _user_exists
+

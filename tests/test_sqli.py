@@ -1,3 +1,4 @@
+import pytest
 from helper import toggle_harden
 
 
@@ -109,3 +110,41 @@ def test_login_hardened_incorrect(client, setup_test_db):
 
     assert res.status_code == 401
     assert data["status"] == "error"
+
+# testing create_admin()
+@pytest.fixture
+def admin_client(client, setup_test_db):
+    """
+    Logs the user in as admin
+    Cannot test create_admin() unless logged in as admin
+    """
+
+    res = client.post("/login", json={
+        "username": "admin",
+        "password": "admin123"
+    })
+
+    data = res.get_json()
+
+    assert res.status_code == 200
+    assert data["status"] == "success"
+
+    return client
+
+def test_create_admin_vuln_inj(admin_client, user_exists):
+    """
+    Tests if SQL injection allowed when in vulnerable state
+    Logs in as admin using admin_client
+    """
+    toggle_harden(False)
+
+    payload = {
+        "username": "newuser1', 'foo', '1540', true); DELETE FROM users WHERE username = 'testuser1';--",
+        "password": "password"
+    }
+
+    res = admin_client.post("/admin/create_admin", json=payload)
+    assert res.status_code == 200
+
+    # testuser1 should have been deleted
+    assert user_exists("testuser1") is False
