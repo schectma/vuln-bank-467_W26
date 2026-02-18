@@ -165,7 +165,8 @@ def test_forgot_password_vuln_incorrect(client, setup_test_db):
 
 def test_forgot_password_hardened_inj(client, setup_test_db):
     """
-    Tests if SQL injection is blocked on forgot_password when in hardened state.
+    Tests if SQL injection is blocked on forgot_password
+    when in hardened state.
     """
     toggle_harden(True)
 
@@ -212,6 +213,7 @@ def test_forgot_password_hardened_incorrect(client, setup_test_db):
 
     assert res.status_code == 404
     assert data["status"] == "error"
+
 
 # testing api_v1_forgot_password()
 def test_forgot_v1_password_vuln_inj(client, setup_test_db):
@@ -267,7 +269,8 @@ def test_forgot_v1_password_vuln_incorrect(client, setup_test_db):
 
 def test_forgot_v1_password_hardened_inj(client, setup_test_db):
     """
-    Tests if SQL injection is blocked on forgot_password when in hardened state.
+    Tests if SQL injection is blocked on forgot_password
+    when in hardened state.
     """
     toggle_harden(True)
 
@@ -314,6 +317,7 @@ def test_forgot_v1_password_hardened_incorrect(client, setup_test_db):
 
     assert res.status_code == 404
     assert data["status"] == "error"
+
 
 # testing api_v2_forgot_password()
 def test_forgot_v2_password_vuln_inj(client, setup_test_db):
@@ -369,7 +373,8 @@ def test_forgot_v2_password_vuln_incorrect(client, setup_test_db):
 
 def test_forgot_v2_password_hardened_inj(client, setup_test_db):
     """
-    Tests if SQL injection is blocked on forgot_password when in hardened state.
+    Tests if SQL injection is blocked on forgot_password
+    when in hardened state.
     """
     toggle_harden(True)
 
@@ -416,6 +421,7 @@ def test_forgot_v2_password_hardened_incorrect(client, setup_test_db):
 
     assert res.status_code == 404
     assert data["status"] == "error"
+
 
 # testing api_v3_forgot_password()
 def test_forgot_v3_password_vuln_inj(client, setup_test_db):
@@ -471,7 +477,8 @@ def test_forgot_v3_password_vuln_incorrect(client, setup_test_db):
 
 def test_forgot_v3_password_hardened_inj(client, setup_test_db):
     """
-    Tests if SQL injection is blocked on forgot_password when in hardened state.
+    Tests if SQL injection is blocked on forgot_password
+    when in hardened state.
     """
     toggle_harden(True)
 
