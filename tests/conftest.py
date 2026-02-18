@@ -123,6 +123,7 @@ def setup_test_db():
 
     app_module.harden = False
 
+
 @pytest.fixture
 def setup_transactions_db():
     """
