@@ -123,6 +123,7 @@ def setup_test_db():
 
     app_module.harden = False
 
+
 @pytest.fixture
 def setup_virtual_cards_db():
     """
@@ -178,4 +179,3 @@ def setup_virtual_cards_db():
     conn.close()
 
     yield
-
