@@ -73,6 +73,8 @@ def ensure_test_db():
 # Add whatever information needs to be in the test database here
 @pytest.fixture(scope="function")
 def setup_test_db():
+    # Clear rate limiting state before each test
+    app_module.rate_limit_storage.clear()
     # Runs before each test
     db_url = os.getenv("TEST_DATABASE_URL")
     assert db_url, "TEST_DATABASE_URL not set"
@@ -120,3 +122,60 @@ def setup_test_db():
     yield
 
     app_module.harden = False
+
+@pytest.fixture
+def setup_virtual_cards_db():
+    """
+    Sets the virtual_cards table
+
+    Inserts:
+        - card id=1 belonging to testuser1 (TEST001)
+        - card id=2 belonging to testuser2 (TEST002)
+
+    Usage:
+        def test_something(user_client, setup_virtual_cards_db):
+            res = user_client.post("/api/virtual-cards/1/toggle-freeze")
+    """
+    db_url = os.getenv("TEST_DATABASE_URL")
+    conn = psycopg2.connect(db_url)
+    cur = conn.cursor()
+
+    cur.execute("TRUNCATE TABLE virtual_cards RESTART IDENTITY CASCADE;")
+
+    cur.execute("""
+        INSERT INTO virtual_cards(
+            user_id,
+            card_number,
+            cvv,
+            expiry_date,
+            card_limit,
+            card_type,
+            is_frozen
+        )
+        VALUES
+            (
+            2,
+            '1111222233334444',
+            '123',
+            '12/26',
+            1000.00,
+            'standard',
+            FALSE
+            ),
+            (
+            3,
+            '5555666677778888',
+            '456',
+            '12/26',
+            1000.00,
+            'standard',
+            FALSE
+            );
+    """)
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    yield
+
