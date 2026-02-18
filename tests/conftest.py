@@ -73,6 +73,8 @@ def ensure_test_db():
 # Add whatever information needs to be in the test database here
 @pytest.fixture(scope="function")
 def setup_test_db():
+    # Clear rate limiting state before each test
+    app_module.rate_limit_storage.clear()
     # Runs before each test
     db_url = os.getenv("TEST_DATABASE_URL")
     assert db_url, "TEST_DATABASE_URL not set"
@@ -120,3 +122,83 @@ def setup_test_db():
     yield
 
     app_module.harden = False
+
+
+@pytest.fixture
+def setup_bill_payments_db():
+    """
+    Sets the bill payments table.
+
+    Usage:
+        def test_something(user_client, setup_bill_payments_db):
+            res = user_client.get("/api/bill-payments/history")
+    """
+    db_url = os.getenv("TEST_DATABASE_URL")
+    conn = psycopg2.connect(db_url)
+    cur = conn.cursor()
+
+    # Seed one virtual card for testuser1 to use in a card payment
+    cur.execute("TRUNCATE TABLE virtual_cards RESTART IDENTITY CASCADE;")
+    cur.execute("""
+        INSERT INTO virtual_cards
+            (
+            user_id,
+            card_number,
+            cvv,
+            expiry_date,
+            card_limit,
+            card_type,
+            is_frozen
+            )
+        VALUES
+            (
+            2,
+            '1111222233334444',
+            '123',
+            '12/26',
+            1000.00,
+            'standard',
+            FALSE
+            );
+    """)
+
+    cur.execute("TRUNCATE TABLE bill_payments RESTART IDENTITY CASCADE;")
+    cur.execute("""
+        INSERT INTO bill_payments
+            (
+            user_id,
+            biller_id,
+            amount,
+            payment_method,
+            card_id,
+            reference_number,
+            status,
+            description
+            )
+        VALUES
+            (
+            2,
+            1,
+            75.00,
+            'balance',
+            NULL,
+            'REF001',
+            'completed',
+            'Water bill payment'
+            ),
+            (2,
+            2,
+            120.00,
+            'virtual_card',
+            1,
+            'REF002',
+            'completed',
+            'Electric bill payment'
+            );
+    """)
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    yield
