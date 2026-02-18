@@ -73,6 +73,8 @@ def ensure_test_db():
 # Add whatever information needs to be in the test database here
 @pytest.fixture(scope="function")
 def setup_test_db():
+    # Clear rate limiting state before each test
+    app_module.rate_limit_storage.clear()
     # Runs before each test
     db_url = os.getenv("TEST_DATABASE_URL")
     assert db_url, "TEST_DATABASE_URL not set"
