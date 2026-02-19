@@ -315,6 +315,7 @@ def setup_virtual_cards_db():
     yield
 
 
+@pytest.fixture
 def setup_bill_payments_db():
     """
     Sets the bill payments table.
