@@ -315,6 +315,7 @@ def setup_virtual_cards_db():
     yield
 
 
+@pytest.fixture
 def user_exists():
     """
     Helper function to tests if user exists
