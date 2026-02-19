@@ -166,6 +166,7 @@ def setup_transactions_db():
 
     yield
 
+
 @pytest.fixture(scope="function")
 def setup_plaintext_db():
     """
