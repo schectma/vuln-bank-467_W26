@@ -111,6 +111,110 @@ def test_login_hardened_incorrect(client, setup_test_db):
     assert data["status"] == "error"
 
 
+# testing create_admin()
+def test_create_admin_vuln_inj(admin_client, user_exists):
+    """
+    Tests if SQL injection allowed when in vulnerable state
+    Logs in as admin using admin_client
+    """
+    payload = {
+        "username": (
+            "newuser1', 'foo', '1540', true); DELETE FROM users "
+            "WHERE username = 'testuser1';--"
+        ),
+        "password": "password"
+    }
+
+    res = admin_client.post("/admin/create_admin", json=payload)
+    assert res.status_code == 200
+
+    # testuser1 should have been deleted
+    assert user_exists("testuser1") is False
+
+
+def test_create_admin_hardened_inj(hardened_admin_client, user_exists):
+    """
+    Tests if SQL injection allowed when in hardened state
+    Logs in as admin using hardened_admin_client
+    """
+
+    payload = {
+        "username": (
+            "newuser1', 'foo', '1540', true); DELETE FROM users "
+            "WHERE username = 'testuser1';--"
+        ),
+        "password": "password"
+    }
+
+    res = hardened_admin_client.post("/admin/create_admin", json=payload)
+    assert res.status_code == 200
+
+    # testuser1 should still exist
+    assert user_exists("testuser1") is True
+
+
+def test_create_admin_vuln_correct(admin_client, user_exists):
+    """
+    Tests if can create admin with correct info in vulnerable mode
+    """
+
+    payload = {
+        "username": "newuser",
+        "password": "password"
+    }
+
+    res = admin_client.post("/admin/create_admin", json=payload)
+    assert res.status_code == 200
+
+    assert user_exists("newuser") is True
+
+
+def test_create_admin_hardened_correct(hardened_admin_client, user_exists):
+    """
+    Tests if can create admin with correct info in hardened mode
+    """
+
+    payload = {
+        "username": "newuser",
+        "password": "password"
+    }
+
+    res = hardened_admin_client.post("/admin/create_admin", json=payload)
+    assert res.status_code == 200
+
+    assert user_exists("newuser") is True
+
+
+def test_create_admin_vuln_incorrect(admin_client, user_exists):
+    """
+    Tests if can create admin with incorrect info in vulnerable mode
+    This is trying to create an admin that already exists
+    """
+
+    payload = {
+        "username": "admin",
+        "password": "password"
+    }
+
+    res = admin_client.post("/admin/create_admin", json=payload)
+    assert res.status_code == 500
+
+
+def test_create_admin_hardened_incorrect(hardened_admin_client, user_exists):
+    """
+    Tests if can create admin with incorrect info in hardened mode
+    This is trying to create an admin that already exists
+    """
+
+    payload = {
+        "username": "admin",
+        "password": "password"
+    }
+
+    res = hardened_admin_client.post("/admin/create_admin", json=payload)
+    assert res.status_code == 500
+
+
 # testing forgot_password()
 def test_forgot_password_vuln_inj(client, setup_test_db):
     """
