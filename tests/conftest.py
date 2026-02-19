@@ -125,6 +125,7 @@ def setup_test_db():
 
 
 @pytest.fixture
+<<<<<<< test_table_virtual_cards
 def setup_virtual_cards_db():
     """
     Sets the virtual_cards table
@@ -136,11 +137,21 @@ def setup_virtual_cards_db():
     Usage:
         def test_something(user_client, setup_virtual_cards_db):
             res = user_client.post("/api/virtual-cards/1/toggle-freeze")
+=======
+def setup_transactions_db():
+    """
+    Creates a test transactions database
+
+    Usage:
+        def test_something(user_client, setup_transactions_db):
+            res = user_client.get("/api/transactions?account_number=TEST001")
+>>>>>>> prelim
     """
     db_url = os.getenv("TEST_DATABASE_URL")
     conn = psycopg2.connect(db_url)
     cur = conn.cursor()
 
+<<<<<<< test_table_virtual_cards
     cur.execute("TRUNCATE TABLE virtual_cards RESTART IDENTITY CASCADE;")
 
     cur.execute("""
@@ -172,6 +183,29 @@ def setup_virtual_cards_db():
             'standard',
             FALSE
             );
+=======
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS transactions (
+            id SERIAL PRIMARY KEY,
+            from_account TEXT NOT NULL,
+            to_account TEXT NOT NULL,
+            amount DECIMAL(15, 2) NOT NULL,
+            timestamp TIMESTAMP DEFAULT NOW(),
+            transaction_type TEXT NOT NULL,
+            description TEXT
+        );
+    """)
+
+    cur.execute("TRUNCATE TABLE transactions RESTART IDENTITY;")
+
+    cur.execute("""
+        INSERT INTO transactions
+            (from_account, to_account, amount, transaction_type, description)
+        VALUES
+            ('TEST001', 'TEST002', 100.00, 'transfer', 'Test transfer 1'),
+            ('TEST002', 'TEST001', 50.00,  'transfer', 'Test transfer 2'),
+            ('TEST001', 'TEST003', 25.00,  'transfer', 'Test transfer 3');
+>>>>>>> prelim
     """)
 
     conn.commit()
