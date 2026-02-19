@@ -162,10 +162,14 @@ def init_auth_routes(app):
         # Vulnerability: SQL Injection still possible here
         conn = sqlite3.connect('bank.db')
         c = conn.cursor()
-        query = f"SELECT * FROM users WHERE username='{auth.get('username')}' AND password='{auth.get('password')}'"
-        c.execute(query)
-        user = c.fetchone()
-        conn.close()
+        # if passwords are not in plaintext
+        if current_app.config.get("HASHMODE", 0) != 0:
+            hashing_login.hashed_login()
+        else:
+            query = f"SELECT * FROM users WHERE username='{auth.get('username')}' AND password='{auth.get('password')}'"
+            c.execute(query)
+            user = c.fetchone()
+            conn.close()
         
         if not user:
             return jsonify({'error': 'Invalid credentials'}), 401
