@@ -1,4 +1,3 @@
-import time
 import jwt
 from helper import toggle_harden
 from auth import JWT_SECRET
@@ -6,6 +5,7 @@ from datetime import datetime, timedelta
 
 
 PROTECTED_ENDPOINT = "/check_balance/TEST001"
+
 
 def test_token_vuln_valid(user_client, setup_test_db):
     """
