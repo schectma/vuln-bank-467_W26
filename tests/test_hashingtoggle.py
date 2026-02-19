@@ -15,7 +15,7 @@ def test_default_hashmode(client, setup_test_db):
     assert data["modename"] == "None - Plaintext"
 
 
-def test_toggle_to_mode1(client, setup_test_db):
+def test_toggle_to_mode1(client, setup_test_db, setup_plaintext_db):
     """
     Tests toggling from 0 to 1 (Weak - SHA-1).
     """
@@ -31,7 +31,7 @@ def test_toggle_to_mode1(client, setup_test_db):
     assert res.get_json()["modename"] == "Weak - SHA-1"
 
 
-def test_toggle_to_mode2(client, setup_test_db):
+def test_toggle_to_mode2(client, setup_test_db, setup_plaintext_db):
     """
     Tests toggling from 1 to 2 (Medium - SHA-256).
     """
@@ -47,7 +47,7 @@ def test_toggle_to_mode2(client, setup_test_db):
     assert res.get_json()["modename"] == "Medium - SHA-256"
 
 
-def test_toggle_to_mode3(client, setup_test_db):
+def test_toggle_to_mode3(client, setup_test_db, setup_plaintext_db):
     """
     Tests toggling from 2 to 3 (Strong - Argon2id).
     """
@@ -63,7 +63,7 @@ def test_toggle_to_mode3(client, setup_test_db):
     assert res.get_json()["modename"] == "Strong - Argon2id"
 
 
-def test_toggle_to_mode4(client, setup_test_db):
+def test_toggle_to_mode4(client, setup_test_db, setup_plaintext_db):
     """
     Tests toggling from 3 to 4 (Various Types).
     """
@@ -79,7 +79,7 @@ def test_toggle_to_mode4(client, setup_test_db):
     assert res.get_json()["modename"] == "Various Types"
 
 
-def test_toggle_wraps_to_mode0(client, setup_test_db):
+def test_toggle_wraps_to_mode0(client, setup_test_db, setup_plaintext_db):
     """
     Tests toggling from 4 wraps back to 0 (Plaintext).
     """
