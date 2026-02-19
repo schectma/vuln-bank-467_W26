@@ -164,6 +164,8 @@ def ensure_test_db():
 # Add whatever information needs to be in the test database here
 @pytest.fixture(scope="function")
 def setup_test_db():
+    # Clear rate limiting state before each test
+    app_module.rate_limit_storage.clear()
     # Runs before each test
     db_url = os.getenv("TEST_DATABASE_URL")
     assert db_url, "TEST_DATABASE_URL not set"
@@ -214,6 +216,48 @@ def setup_test_db():
 
 
 @pytest.fixture
+def setup_transactions_db():
+    """
+    Creates a test transactions database
+
+    Usage:
+        def test_something(user_client, setup_transactions_db):
+            res = user_client.get("/api/transactions?account_number=TEST001")
+    """
+    db_url = os.getenv("TEST_DATABASE_URL")
+    conn = psycopg2.connect(db_url)
+    cur = conn.cursor()
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS transactions (
+            id SERIAL PRIMARY KEY,
+            from_account TEXT NOT NULL,
+            to_account TEXT NOT NULL,
+            amount DECIMAL(15, 2) NOT NULL,
+            timestamp TIMESTAMP DEFAULT NOW(),
+            transaction_type TEXT NOT NULL,
+            description TEXT
+        );
+    """)
+
+    cur.execute("TRUNCATE TABLE transactions RESTART IDENTITY;")
+
+    cur.execute("""
+        INSERT INTO transactions
+            (from_account, to_account, amount, transaction_type, description)
+        VALUES
+            ('TEST001', 'TEST002', 100.00, 'transfer', 'Test transfer 1'),
+            ('TEST002', 'TEST001', 50.00,  'transfer', 'Test transfer 2'),
+            ('TEST001', 'TEST003', 25.00,  'transfer', 'Test transfer 3');
+    """)
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    yield
+
+
 def user_exists():
     """
     Helper function to tests if user exists
