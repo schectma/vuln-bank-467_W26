@@ -1,6 +1,5 @@
 from helper import toggle_harden
-import psycopg2
-import os
+
 
 # testing login()
 def test_login_vuln_inj(client, setup_test_db):
@@ -111,8 +110,13 @@ def test_login_hardened_incorrect(client, setup_test_db):
     assert res.status_code == 401
     assert data["status"] == "error"
 
+
 # testing create_virtual_card()
-def test_create_virtual_card_vuln_inj(user_client, setup_test_db, setup_virtual_cards_db):
+def test_create_virtual_card_vuln_inj(
+    user_client,
+    setup_test_db,
+    setup_virtual_cards_db
+):
     """
     Tests if SQL injection for card_type possible in vulnerable mode
     """
@@ -132,7 +136,12 @@ def test_create_virtual_card_vuln_inj(user_client, setup_test_db, setup_virtual_
     assert res.status_code == 500
     assert data["status"] == "error"
 
-def test_create_virtual_card_vuln_correct(user_client, setup_test_db, setup_virtual_cards_db):
+
+def test_create_virtual_card_vuln_correct(
+    user_client,
+    setup_test_db,
+    setup_virtual_cards_db
+):
     """
     Tests that a virtual card is created with valid input in vulnerable mode.
     """
@@ -153,7 +162,12 @@ def test_create_virtual_card_vuln_correct(user_client, setup_test_db, setup_virt
     assert data["card_details"]["limit"] == 500.0
     assert data["card_details"]["type"] == "standard"
 
-def test_create_virtual_card_vuln_incorrect(user_client, setup_test_db, setup_virtual_cards_db):
+
+def test_create_virtual_card_vuln_incorrect(
+    user_client,
+    setup_test_db,
+    setup_virtual_cards_db
+):
     """
     Tests behavior with invalid input in vulnerable mode.
     card_limit is cast to float, so a non-numeric value causes an error.
@@ -171,7 +185,12 @@ def test_create_virtual_card_vuln_incorrect(user_client, setup_test_db, setup_vi
     assert res.status_code == 500
     assert data["status"] == "error"
 
-def test_create_virtual_card_hardened_inj(hardened_user_client, setup_test_db, setup_virtual_cards_db):
+
+def test_create_virtual_card_hardened_inj(
+    hardened_user_client,
+    setup_test_db,
+    setup_virtual_cards_db
+):
     """
     Tests that SQL injection via card_type is blocked in hardened mode.
     The parameterized query treats the payload as a literal string,
@@ -190,7 +209,12 @@ def test_create_virtual_card_hardened_inj(hardened_user_client, setup_test_db, s
     assert data["status"] == "success"
     assert data["card_details"]["type"] == "anything'); --"
 
-def test_create_virtual_card_hardened_correct(hardened_user_client, setup_test_db, setup_virtual_cards_db):
+
+def test_create_virtual_card_hardened_correct(
+    hardened_user_client,
+    setup_test_db,
+    setup_virtual_cards_db
+):
     """
     Tests that a virtual card is created with valid input in hardened mode.
     """
@@ -207,9 +231,15 @@ def test_create_virtual_card_hardened_correct(hardened_user_client, setup_test_d
     assert data["card_details"]["limit"] == 500.0
     assert data["card_details"]["type"] == "standard"
 
-def test_create_virtual_card_hardened_incorrect(hardened_user_client, setup_test_db, setup_virtual_cards_db):
+
+def test_create_virtual_card_hardened_incorrect(
+    hardened_user_client,
+    setup_test_db,
+    setup_virtual_cards_db
+):
     """
-    Tests that user cannot create card in hardened mode with incorrect information.
+    Tests that user cannot create card in hardened mode
+    with incorrect information.
     """
     payload = {
         "card_limit": "not_a_number",
