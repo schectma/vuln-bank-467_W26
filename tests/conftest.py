@@ -4,6 +4,7 @@ import os
 from app import app as flask_app
 from database import init_connection_pool, init_db
 import app as app_module
+from helper import toggle_harden
 
 
 @pytest.fixture
@@ -17,6 +18,96 @@ def client():
     # Creates Flask test client
     with flask_app.test_client() as client:
         yield client
+
+
+def _login(client, username, password, hardened):
+    """
+    Internal helper that toggles harden state, logs in, and attaches
+    the JWT token to the client's Authorization header.
+    """
+    toggle_harden(hardened)
+
+    res = client.post("/login", json={
+        "username": username,
+        "password": password
+    })
+
+    assert res.status_code == 200, (
+        f"Login failed for '{username}' (hardened={hardened}): "
+        f"{res.status_code} {res.get_json()}"
+    )
+
+    token = res.get_json().get("token")
+    client.environ_base["HTTP_AUTHORIZATION"] = f"Bearer {token}"
+
+    return client
+
+
+@pytest.fixture
+def admin_client(client, setup_test_db):
+    """
+    Logged in as admin in vulnerable (unhardened) mode.
+
+    Usage:
+        def test_something(admin_client):
+            res = admin_client.post("/admin/create_admin", json={...})
+    """
+    return _login(
+        client,
+        username="admin",
+        password="admin123",
+        hardened=False
+    )
+
+
+@pytest.fixture
+def hardened_admin_client(client, setup_test_db):
+    """
+    Logged in as admin in hardened mode.
+
+    Usage:
+        def test_something(hardened_admin_client):
+            res = hardened_admin_client.post("/admin/create_admin", json={...})
+    """
+    return _login(
+        client,
+        username="admin",
+        password="admin123",
+        hardened=True
+    )
+
+
+@pytest.fixture
+def user_client(client, setup_test_db):
+    """
+    Logged in as a non-admin user (testuser1) in vulnerable (unhardened) mode.
+
+    Usage:
+        def test_something(user_client):
+            res = user_client.get("/some/route")
+    """
+    return _login(
+        client, username="testuser1",
+        password="testpassword1",
+        hardened=False
+    )
+
+
+@pytest.fixture
+def hardened_user_client(client, setup_test_db):
+    """
+    Logged in as a non-admin user (testuser1) in hardened mode.
+
+    Usage:
+        def test_something(hardened_user_client):
+            res = hardened_user_client.get("/some/route")
+    """
+    return _login(
+        client,
+        username="testuser1",
+        password="testpassword1",
+        hardened=True
+    )
 
 
 # Create test database
@@ -302,3 +393,24 @@ def setup_bill_payments_db():
     conn.close()
 
     yield
+
+
+@pytest.fixture
+def user_exists():
+    """
+    Helper function to tests if user exists
+    This is to help with testing SQL injections
+    """
+    def _user_exists(username):
+        conn = psycopg2.connect(os.getenv("TEST_DATABASE_URL"))
+        cur = conn.cursor()
+
+        cur.execute("SELECT 1 FROM users WHERE username = %s;", (username,))
+        exists = cur.fetchone() is not None
+
+        cur.close()
+        conn.close()
+
+        return exists
+
+    return _user_exists
