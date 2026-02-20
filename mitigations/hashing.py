@@ -4,7 +4,6 @@ import os
 import random
 import hashlib
 from argon2 import PasswordHasher
-from argon2.exceptions import VerifyMismatchError
 from argon2.exceptions import VerifyMismatchError, InvalidHashError
 from flask import current_app
 
@@ -159,16 +158,13 @@ def create_hashed_password(password):
         return f"plaintext${password}"
     elif mode == 1:
         # SHA-1 Weak Hashing without salt
-        #return hashlib.sha1(password.encode()).hexdigest()
         return f"sha1${hashlib.sha1(password.encode()).hexdigest()}"
     elif mode == 2:
         # SHA-256 Medium Hashing without salt
-        #return hashlib.sha256(password.encode()).hexdigest()
         return f"sha256${hashlib.sha256(password.encode()).hexdigest()}"
     elif mode == 3:
         # Argon2id Strong Hashing, automatically salts
 
-        #return ph.hash(password)
         ph = PasswordHasher()
         return f"argon2id${ph.hash(password)}"
     elif mode == 4:
@@ -181,41 +177,34 @@ def password_options(password):
     """
     For the various toggle option
     """
-    #sel = random.choice([0, 1, 2, 3])
     sel = random.choice([1, 2, 3])
 
-    #if sel == 0:
-    #    return password
     if sel == 1:
         # SHA-1 Weak Hashing without salt
-        #return hashlib.sha1(password.encode()).hexdigest()
         return f"sha1${hashlib.sha1(password.encode()).hexdigest()}"
     elif sel == 2:
         # SHA-256 Medium Hashing without salt
-        #return hashlib.sha256(password.encode()).hexdigest()
         return f"sha256${hashlib.sha256(password.encode()).hexdigest()}"
     elif sel == 3:
         # Argon2id Strong Hashing, automatically salts
         ph = PasswordHasher()
-        #return ph.hash(password)
         return f"argon2id${ph.hash(password)}"
 
     return password
 
+
 def hashed_login(username, password):
     conn, cur = get_database()
-    #c.execute("SELECT * FROM users WHERE username = ?", (auth.get('username'),))
     cur.execute("SELECT * FROM users WHERE username = %s", (username,))
     user = cur.fetchone()
     cur.close()
     conn.close()
 
     # user[2] is the password column in the database
-    #if not user or not check_password(user[2], auth.get('password')):
-    #    return jsonify({'error': 'Invalid credentials'}), 401
     if not user or not check_password(user[2], password):
         return None
     return user
+
 
 def check_password(stored_password, submitted_password):
     hash_algo, pword = stored_password.split("$", 1)
@@ -236,4 +225,3 @@ def check_password(stored_password, submitted_password):
             return False
 
     return False
-
