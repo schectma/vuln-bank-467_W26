@@ -395,6 +395,39 @@ def setup_bill_payments_db():
     yield
 
 
+@pytest.fixture(scope="function")
+def setup_plaintext_db():
+    """
+    Creates and seeds users_plaintext with the test users
+    so that create_hashing_db() only updates existing users
+    """
+    db_url = os.getenv("TEST_DATABASE_URL")
+    conn = psycopg2.connect(db_url)
+    cur = conn.cursor()
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS users_plaintext (
+            username TEXT PRIMARY KEY,
+            password TEXT NOT NULL
+        );
+    """)
+
+    cur.execute("TRUNCATE TABLE users_plaintext;")
+
+    # Copy only the users that setup_test_db already inserted
+    cur.execute("""
+        INSERT INTO users_plaintext (username, password)
+        SELECT username, password FROM users
+        ON CONFLICT (username) DO NOTHING;
+    """)
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    yield
+
+
 @pytest.fixture
 def user_exists():
     """
