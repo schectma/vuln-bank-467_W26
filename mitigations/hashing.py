@@ -169,6 +169,7 @@ def create_hashed_password(password):
         # Argon2id Strong Hashing, automatically salts
 
         #return ph.hash(password)
+        ph = PasswordHasher()
         return f"argon2id${ph.hash(password)}"
     elif mode == 4:
         return password_options(password)
