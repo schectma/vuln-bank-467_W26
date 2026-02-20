@@ -234,3 +234,18 @@ def check_password(stored_password, submitted_password):
             return False
 
     return False
+
+
+def save_plaintext(username, password):
+    """
+    When user registers, need to save plaintext password
+    """
+    conn, cur = get_database()
+    cur.execute("""
+        INSERT INTO users_plaintext (username, password)
+        VALUES (%s, %s)
+        ON CONFLICT (username) DO UPDATE SET password = %s
+    """, (username, password, password))
+    conn.commit()
+    cur.close()
+    conn.close()
