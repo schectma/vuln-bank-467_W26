@@ -150,6 +150,7 @@ def create_hashing_db():
 def create_hashed_password(password):
     """
     Hashes the passwords according to HASHMODE
+    Encodes the hashing algorithm into the string
     """
 
     mode = current_app.config.get("HASHMODE", 0)
@@ -176,6 +177,7 @@ def create_hashed_password(password):
 def password_options(password):
     """
     For the various toggle option
+    Encodes the hashing algorithm into the string
     """
     sel = random.choice([1, 2, 3])
 
@@ -194,6 +196,10 @@ def password_options(password):
 
 
 def hashed_login(username, password):
+    """
+    Checks if the username and password match
+    information in the Users table
+    """
     conn, cur = get_database()
     cur.execute("SELECT * FROM users WHERE username = %s", (username,))
     user = cur.fetchone()
@@ -207,6 +213,10 @@ def hashed_login(username, password):
 
 
 def check_password(stored_password, submitted_password):
+    """
+    Splits the encoded hashing algorithm from the password
+    Compares input password with password in the database
+    """
     hash_algo, pword = stored_password.split("$", 1)
 
     if hash_algo == "plaintext":
