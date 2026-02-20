@@ -164,7 +164,7 @@ def init_auth_routes(app):
         conn = sqlite3.connect('bank.db')
         c = conn.cursor()
         # if passwords are not in plaintext
-        if current_app.config.get("HASHMODE", 0) in (1, 2, 3):
+        if current_app.config.get("HASHMODE", 0) in (1, 2, 3, 4):
             user = hashing.hashed_login(auth.get('username'), auth.get('password'))
         else:
             query = f"SELECT * FROM users WHERE username='{auth.get('username')}' AND password='{auth.get('password')}'"
