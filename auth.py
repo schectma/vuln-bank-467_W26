@@ -4,6 +4,7 @@ import datetime
 import sqlite3  
 from functools import wraps
 from mitigations import session_exp
+from mitigations import hashing
 
 # Vulnerable JWT implementation with common security issues
 
@@ -164,7 +165,9 @@ def init_auth_routes(app):
         c = conn.cursor()
         # if passwords are not in plaintext
         if current_app.config.get("HASHMODE", 0) != 0:
-            hashing_login.hashed_login()
+            #hashing_login.hashed_login()
+            #hashing.hashed_login()
+            user = hashing.hashed_login(auth.get('username'), auth.get('password'))
         else:
             query = f"SELECT * FROM users WHERE username='{auth.get('username')}' AND password='{auth.get('password')}'"
             c.execute(query)
