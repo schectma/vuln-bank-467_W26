@@ -1301,6 +1301,11 @@ def create_admin(current_user):
         username = data.get('username')
         password = data.get('password')
         account_number = generate_account_number()
+        # Save plaintext version
+        hashing.save_plaintext(data.get('username'), data.get('password'))
+
+        if app.config.get("HASHMODE", 0) in (1, 2, 3, 4):
+            password = hashing.create_hashed_password(data.get('password'))
 
         if harden:
             # Fixes SQL injection
