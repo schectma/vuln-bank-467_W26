@@ -155,9 +155,9 @@ def create_hashed_password(password):
 
     mode = current_app.config.get("HASHMODE", 0)
 
-    if mode == 0:
-        return f"plaintext${password}"
-    elif mode == 1:
+    #if mode == 0:
+    #    return password
+    if mode == 1:
         # SHA-1 Weak Hashing without salt
         return f"sha1${hashlib.sha1(password.encode()).hexdigest()}"
     elif mode == 2:
@@ -219,9 +219,9 @@ def check_password(stored_password, submitted_password):
     """
     hash_algo, pword = stored_password.split("$", 1)
 
-    if hash_algo == "plaintext":
-        return pword == submitted_password
-    elif hash_algo == "sha1":
+    #if hash_algo == "plaintext":
+    #    return pword == submitted_password
+    if hash_algo == "sha1":
         return pword == hashlib.sha1(submitted_password.encode()).hexdigest()
     elif hash_algo == "sha256":
         return pword == hashlib.sha256(submitted_password.encode()).hexdigest()
