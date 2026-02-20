@@ -111,6 +111,110 @@ def test_login_hardened_incorrect(client, setup_test_db):
     assert data["status"] == "error"
 
 
+# testing create_admin()
+def test_create_admin_vuln_inj(admin_client, user_exists):
+    """
+    Tests if SQL injection allowed when in vulnerable state
+    Logs in as admin using admin_client
+    """
+    payload = {
+        "username": (
+            "newuser1', 'foo', '1540', true); DELETE FROM users "
+            "WHERE username = 'testuser1';--"
+        ),
+        "password": "password"
+    }
+
+    res = admin_client.post("/admin/create_admin", json=payload)
+    assert res.status_code == 200
+
+    # testuser1 should have been deleted
+    assert user_exists("testuser1") is False
+
+
+def test_create_admin_hardened_inj(hardened_admin_client, user_exists):
+    """
+    Tests if SQL injection allowed when in hardened state
+    Logs in as admin using hardened_admin_client
+    """
+
+    payload = {
+        "username": (
+            "newuser1', 'foo', '1540', true); DELETE FROM users "
+            "WHERE username = 'testuser1';--"
+        ),
+        "password": "password"
+    }
+
+    res = hardened_admin_client.post("/admin/create_admin", json=payload)
+    assert res.status_code == 200
+
+    # testuser1 should still exist
+    assert user_exists("testuser1") is True
+
+
+def test_create_admin_vuln_correct(admin_client, user_exists):
+    """
+    Tests if can create admin with correct info in vulnerable mode
+    """
+
+    payload = {
+        "username": "newuser",
+        "password": "password"
+    }
+
+    res = admin_client.post("/admin/create_admin", json=payload)
+    assert res.status_code == 200
+
+    assert user_exists("newuser") is True
+
+
+def test_create_admin_hardened_correct(hardened_admin_client, user_exists):
+    """
+    Tests if can create admin with correct info in hardened mode
+    """
+
+    payload = {
+        "username": "newuser",
+        "password": "password"
+    }
+
+    res = hardened_admin_client.post("/admin/create_admin", json=payload)
+    assert res.status_code == 200
+
+    assert user_exists("newuser") is True
+
+
+def test_create_admin_vuln_incorrect(admin_client, user_exists):
+    """
+    Tests if can create admin with incorrect info in vulnerable mode
+    This is trying to create an admin that already exists
+    """
+
+    payload = {
+        "username": "admin",
+        "password": "password"
+    }
+
+    res = admin_client.post("/admin/create_admin", json=payload)
+    assert res.status_code == 500
+
+
+def test_create_admin_hardened_incorrect(hardened_admin_client, user_exists):
+    """
+    Tests if can create admin with incorrect info in hardened mode
+    This is trying to create an admin that already exists
+    """
+
+    payload = {
+        "username": "admin",
+        "password": "password"
+    }
+
+    res = hardened_admin_client.post("/admin/create_admin", json=payload)
+    assert res.status_code == 500
+
+
 # testing forgot_password()
 def test_forgot_password_vuln_inj(client, setup_test_db):
     """
@@ -525,3 +629,95 @@ def test_forgot_v3_password_hardened_incorrect(client, setup_test_db):
 
     assert res.status_code == 404
     assert data["status"] == "error"
+
+
+# tests api_transactions()
+def test_api_transactions_vuln_inj(user_client, setup_transactions_db):
+    """
+    Tests if SQL injection allowed in vulnerable mode
+    """
+    injection = "' OR '1'='1"
+
+    res = user_client.get(f"/api/transactions?account_number={injection}")
+    data = res.get_json()
+
+    assert res.status_code == 200
+    # Injection causes all transactions to be returned, not just TEST001's
+    assert len(data["transactions"]) > 1
+
+
+def test_api_transactions_vuln_valid(user_client, setup_transactions_db):
+    """
+    Tests that transactions are returned for a valid account number
+    """
+    res = user_client.get("/api/transactions?account_number=TEST001")
+    data = res.get_json()
+
+    assert res.status_code == 200
+    assert data["account_number"] == "TEST001"
+    assert len(data["transactions"]) > 0
+
+
+def test_api_transactions_vuln_invalid(user_client, setup_transactions_db):
+    """
+    Tests that transactions are not returned for invalid account number
+    """
+    res = user_client.get("/api/transactions?account_number=DOESNOTEXIST")
+    data = res.get_json()
+
+    assert res.status_code == 200
+    assert data["transactions"] == []
+
+
+def test_api_transactions_hardened_inj(
+    hardened_user_client,
+    setup_transactions_db
+):
+    """
+    Tests that transactions are not returned when injection used
+    in hardened mode
+    """
+
+    injection = "' OR '1'='1"
+
+    res = hardened_user_client.get(
+        f"/api/transactions?account_number={injection}"
+    )
+    data = res.get_json()
+
+    assert res.status_code == 200
+    # Parameterized query treats the payload as a literal — no matches
+    assert data["transactions"] == []
+
+
+def test_api_transactions_hardened_valid(
+    hardened_user_client,
+    setup_transactions_db
+):
+    """
+    Tests that transactions are returned for a valid account number
+    """
+    res = hardened_user_client.get(
+        "/api/transactions?account_number=TEST001"
+    )
+    data = res.get_json()
+
+    assert res.status_code == 200
+    assert data["account_number"] == "TEST001"
+    assert len(data["transactions"]) > 0
+
+
+def test_api_transactions_hardened_invalid(
+    hardened_user_client,
+    setup_transactions_db
+):
+    """
+    Tests that an empty list is returned for invalid account numbers
+    """
+    res = hardened_user_client.get(
+        "/api/transactions?account_number=DOESNOTEXIST"
+    )
+    data = res.get_json()
+
+    assert res.status_code == 200
+    assert data["transactions"] == []
