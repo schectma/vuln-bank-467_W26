@@ -528,10 +528,6 @@ def login():
             if app.config.get("HASHMODE", 0) != 0:
                 user_row = hashing.hashed_login(username, password)
                 user = [user_row] if user_row else []
-                #if user_row:
-                #    user = [user_row]    # wrap the single row in a list
-                #else:
-                #    user = []            # empty list = no user found
             elif harden:
                 # Fixes SQL injection vulnerability
                 query = sql_injections.login_hardened()
