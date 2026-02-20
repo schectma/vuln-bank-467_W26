@@ -525,8 +525,10 @@ def login():
             
             print(f"Login attempt - Username: {username}")  # Debug print
 
-            if app.config.get("HASHMODE", 0) != 0:
+            if app.config.get("HASHMODE", 0) in (1, 2, 3, 4):
+                # Returns user information from database
                 user_row = hashing.hashed_login(username, password)
+                # user_row will be returned if valid password/username
                 user = [user_row] if user_row else []
             elif harden:
                 # Fixes SQL injection vulnerability
