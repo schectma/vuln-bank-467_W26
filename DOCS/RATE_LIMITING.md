@@ -65,3 +65,26 @@ Users will observe that despite entering the correct PIN, rate limiting will hav
 ![Mitigation; Rate limit reached](./screenshots/rate_lim_pw_5.png)
 
 ![Mitigation; Rate limit reached, despite correct PIN, reset is temporarily blocked](./screenshots/rate_lim_pw_6.png)
+
+## Registration Rate Limiting/Lack of Resources (Vulnerable/Non-hardened)
+
+Similar to the above examples, a lack of rate limiting on registration attempts presents different kinds of cybersecurity concerns. One of the clearest ones is the ability to brute force account registrations, for the purpose of creating bots and spam accounts, and/or overloading the app's user database. 
+
+1) Confirm app is in vulnerable/non-hardened state (check toggle on homepage).
+2) Select 'Register' on the homepage.
+3) Enter previously created test account username, but enter an incorrect password.
+4) Re-enter this correct username+incorrect password combination at least 5 more times.
+
+![Vulnerable; No rate limiting](./screenshots/rate_lim_reg_vul.png)
+
+## Registration Rate Limiting/Lack of Resources (Mitigated/Hardened)
+
+Similar to the above examples, a lack of rate limiting on registration attempts presents different kinds of cybersecurity concerns. One of the clearest ones is the ability to brute force account registrations, for the purpose of creating bots and spam accounts, and/or overloading the app's user database. 
+
+1) Confirm app is in hardened mode (check toggle on homepage).
+2) Select 'Register' on the homepage.
+3) Enter previously created test account username, but enter an incorrect password.
+4) Re-enter this correct username+incorrect password combination at least 5 more times.
+5) Now try to log in with the correct password, which is still blocked and confirms rate limiting is IP-based.
+
+![Mitigation; Rate limit reached](./screenshots/rate_lim_reg_mit.png)
