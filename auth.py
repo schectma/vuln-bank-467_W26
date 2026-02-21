@@ -4,6 +4,7 @@ import datetime
 import sqlite3  
 from functools import wraps
 from mitigations import session_exp
+from mitigations import hashing
 
 # Vulnerable JWT implementation with common security issues
 
@@ -162,10 +163,14 @@ def init_auth_routes(app):
         # Vulnerability: SQL Injection still possible here
         conn = sqlite3.connect('bank.db')
         c = conn.cursor()
-        query = f"SELECT * FROM users WHERE username='{auth.get('username')}' AND password='{auth.get('password')}'"
-        c.execute(query)
-        user = c.fetchone()
-        conn.close()
+        # if passwords are not in plaintext
+        if current_app.config.get("HASHMODE", 0) in (1, 2, 3, 4):
+            user = hashing.hashed_login(auth.get('username'), auth.get('password'))
+        else:
+            query = f"SELECT * FROM users WHERE username='{auth.get('username')}' AND password='{auth.get('password')}'"
+            c.execute(query)
+            user = c.fetchone()
+            conn.close()
         
         if not user:
             return jsonify({'error': 'Invalid credentials'}), 401
