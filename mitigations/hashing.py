@@ -22,6 +22,10 @@ def get_database():
     """
     Helper function for database connection/cursor
     """
+    # Use test database when pytest is running
+    if current_app.config.get("TESTING"):
+        conn = psycopg2.connect(os.getenv("TEST_DATABASE_URL"))
+        return conn, conn.cursor()
 
     conn = psycopg2.connect(
         dbname=os.getenv("DB_NAME"),
