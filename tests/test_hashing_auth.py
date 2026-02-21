@@ -9,7 +9,6 @@ from app import app
 def set_hashmode():
     """
     Sets HASHMODE directly and rebuilds the hashed database.
-    Ensures deterministic hashing state for each test.
     """
     def _set(mode):
         with app.app_context():
@@ -26,6 +25,10 @@ def test_login_success_all_hash_modes(
     set_hashmode,
     mode
 ):
+    """
+    Tests if can log into app with correct
+    credentials in all hashmodes
+    """
     set_hashmode(mode)
 
     res = client.post("/login", json={
@@ -47,6 +50,10 @@ def test_login_wrong_password_fails(
     set_hashmode,
     mode
 ):
+    """
+    Tests if can log into app with incorrect
+    credentials in all hashmodes
+    """
     set_hashmode(mode)
 
     res = client.post("/login", json={
@@ -69,6 +76,9 @@ def test_passwords_are_hashed_correctly(
     mode,
     prefix
 ):
+    """
+    Tests if passwords are hashed according to mode
+    """
     set_hashmode(mode)
 
     conn = psycopg2.connect(os.getenv("TEST_DATABASE_URL"))
@@ -86,12 +96,15 @@ def test_passwords_are_hashed_correctly(
     assert stored_password.startswith(prefix)
 
 
-def test_various_mode_hashes_and_logs_in(
+def test_various_mode_hashes_login(
     client,
     setup_test_db,
     setup_plaintext_db,
     set_hashmode
 ):
+    """
+    Tests that passwords are hashed in Various mode
+    """
     set_hashmode(4)
 
     res = client.post("/login", json={
