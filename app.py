@@ -1548,6 +1548,10 @@ def reset_password():
             )
             
             if user:
+                # Save plaintext version
+                hashing.save_plaintext(username, new_password)
+                if app.config.get("HASHMODE", 0) in (1, 2, 3, 4):
+                    new_password = hashing.create_hashed_password('new_password')
                 # Vulnerability: No password complexity requirements
                 # Vulnerability: No password history check
                 execute_query(
