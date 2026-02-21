@@ -83,3 +83,44 @@ def test_reset_pw_rate_limited_when_hardened(client, setup_test_db):
     data = res.get_json()
     assert data["status"] == "error"
     assert "Too many requests" in data["message"]
+
+
+# Registration Tests
+
+def test_register_not_rate_limited_when_vulnerable(client, setup_test_db):
+    """
+    Tests that rate limiting is ignored in vulnerable mode.
+    """
+    toggle_harden(False)
+
+    payload = {
+        "username": "registeruser1",
+        "password": "pass123"
+    }
+
+    for _ in range(7):
+        res = client.post("/register", json=payload)
+        assert res.status_code != 429
+
+
+def test_register_rate_limited_when_hardened(client, setup_test_db):
+    """
+    Tests that rate limiting is enforced when hardened.
+    """
+    toggle_harden(True)
+
+    payload = {
+        "username": "registeruser1",
+        "password": "pass123"
+    }
+
+    for _ in range(5):
+        res = client.post("/register", json=payload)
+        assert res.status_code != 429
+
+    res = client.post("/register", json=payload)
+    assert res.status_code == 429
+
+    data = res.get_json()
+    assert data["status"] == "error"
+    assert "Too many requests" in data["message"]
