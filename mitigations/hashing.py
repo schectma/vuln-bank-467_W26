@@ -20,6 +20,7 @@ def initialize():
 
 def get_database():
     """
+    ADD EXCEPTION HANDLING
     Helper function for database connection/cursor
     """
 
@@ -35,6 +36,7 @@ def get_database():
 
 def add_demo_users():
     """
+    ADD EXCEPTION HANDLING
     Add hashed demo users to User table
     Most of the passwords are simple common passwords
     """
@@ -80,6 +82,7 @@ def add_demo_users():
 
 def create_plaintext_table():
     """
+    ADD EXCEPTION HANDLING
     Create a table that stores plaintext passwords
     This is needed as hashing is one way
     Therefore I cannot got from weak to medium etc. as
@@ -101,6 +104,7 @@ def create_plaintext_table():
 
 def add_existing_users():
     """
+    ADD EXCEPTION HANDLING
     Add existing users to the plaintext table
     """
     conn, cur = get_database()
@@ -119,6 +123,7 @@ def add_existing_users():
 
 def create_hashing_db():
     """
+    ADD EXCEPTION HANDLING
     Creates a database of hashed passwords
     """
 
@@ -195,6 +200,7 @@ def password_options(password):
 
 def hashed_login(username, password):
     """
+    ADD EXCEPTION HANDLING
     Checks if the username and password match
     information in the Users table
     """
