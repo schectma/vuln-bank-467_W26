@@ -1418,6 +1418,9 @@ def hashed_pass():
     Allows the user to view the passwords for the
     hashing demo
     """
+    cur = None
+    conn = None
+
     try:
         conn = psycopg2.connect(
         dbname=os.getenv("DB_NAME"),
@@ -1436,9 +1439,6 @@ def hashed_pass():
 
         rows = cur.fetchall()
 
-        cur.close()
-        conn.close()
-
         return jsonify(rows)
 
     except Exception as e:
@@ -1447,6 +1447,11 @@ def hashed_pass():
             'status': 'error',
             'message': str(e)
         }), 500
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
 
 
 # Forgot password endpoint
