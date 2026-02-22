@@ -116,6 +116,7 @@ def ensure_test_db():
     """
     Runs once before any tests.
     Creates the test database if it doesn't exist.
+    ADD EXCEPTION HANDLING
     """
     main_db_url = os.getenv("DATABASE_URL")
     test_db_url = os.getenv("TEST_DATABASE_URL")
@@ -164,6 +165,9 @@ def ensure_test_db():
 # Add whatever information needs to be in the test database here
 @pytest.fixture(scope="function")
 def setup_test_db():
+    """
+    ADD EXCEPTION HANDLING
+    """
     # Clear rate limiting state before each test
     app_module.rate_limit_storage.clear()
     # Runs before each test
@@ -218,6 +222,7 @@ def setup_test_db():
 @pytest.fixture
 def setup_transactions_db():
     """
+    ADD EXCEPTION HANDLING
     Creates a test transactions database
 
     Usage:
@@ -261,6 +266,7 @@ def setup_transactions_db():
 @pytest.fixture
 def setup_virtual_cards_db():
     """
+    ADD EXCEPTION HANDLING
     Sets the virtual_cards table
 
     Inserts:
@@ -318,6 +324,7 @@ def setup_virtual_cards_db():
 @pytest.fixture
 def setup_bill_payments_db():
     """
+    ADD EXCEPTION HANDLING
     Sets the bill payments table.
 
     Usage:
@@ -398,6 +405,7 @@ def setup_bill_payments_db():
 @pytest.fixture(scope="function")
 def setup_plaintext_db():
     """
+    ADD EXCEPTION HANDLING
     Creates and seeds users_plaintext with the test users
     so that create_hashing_db() only updates existing users
     """
@@ -431,6 +439,7 @@ def setup_plaintext_db():
 @pytest.fixture
 def user_exists():
     """
+    ADD EXCEPTION HANDLING
     Helper function to tests if user exists
     This is to help with testing SQL injections
     """
