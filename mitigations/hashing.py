@@ -241,11 +241,16 @@ def save_plaintext(username, password):
     When user registers, need to save plaintext password
     """
     conn, cur = get_database()
-    cur.execute("""
-        INSERT INTO users_plaintext (username, password)
-        VALUES (%s, %s)
-        ON CONFLICT (username) DO UPDATE SET password = %s
-    """, (username, password, password))
-    conn.commit()
-    cur.close()
-    conn.close()
+    try:
+        cur.execute("""
+            INSERT INTO users_plaintext (username, password)
+            VALUES (%s, %s)
+            ON CONFLICT (username) DO UPDATE SET password = %s
+        """, (username, password, password))
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        cur.close()
+        conn.close()
