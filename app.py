@@ -407,6 +407,7 @@ def forge_jwt_tool():
     return flask.send_from_directory('.', 'forge_jwt.html')
 
 @app.route('/register', methods=['GET', 'POST'])
+@ip_rate_limit(prefix="register", limit=5)
 def register():
     if request.method == 'POST':
         try:
