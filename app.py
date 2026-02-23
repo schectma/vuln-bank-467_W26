@@ -407,6 +407,7 @@ def forge_jwt_tool():
     return flask.send_from_directory('.', 'forge_jwt.html')
 
 @app.route('/register', methods=['GET', 'POST'])
+@ip_rate_limit(prefix="register", limit=5)
 def register():
     if request.method == 'POST':
         try:
@@ -432,10 +433,19 @@ def register():
                 # HARDENED: registration field whitelist
                 ALLOWED_REGISTRATION_FIELDS = ['username', 'password']
 
-            # Build dynamic query based on user input fields
-            # Vulnerability: Mass Assignment possible here
-            fields = ['username', 'password', 'account_number']
-            values = [user_data.get('username'), user_data.get('password'), account_number]
+            if app.config.get("HASHMODE", 0) in (1, 2, 3, 4):
+                fields = ['username', 'password', 'account_number']
+                # Hash the password before storing
+                values = [user_data.get('username'), hashing.create_hashed_password(user_data.get('password')), account_number]
+
+            else:
+                # Build dynamic query based on user input fields
+                # Vulnerability: Mass Assignment possible here
+                fields = ['username', 'password', 'account_number']
+                values = [user_data.get('username'), user_data.get('password'), account_number]
+
+            # Save plaintext version
+            hashing.save_plaintext(user_data.get('username'), user_data.get('password'))
             
             if harden:
                 # HARDEN: validate input against whitelist
@@ -525,7 +535,12 @@ def login():
             
             print(f"Login attempt - Username: {username}")  # Debug print
 
-            if harden:
+            if app.config.get("HASHMODE", 0) in (1, 2, 3, 4):
+                # Returns user information from database
+                user_row = hashing.hashed_login(username, password)
+                # user_row will be returned if valid password/username
+                user = [user_row] if user_row else []
+            elif harden:
                 # Fixes SQL injection vulnerability
                 query = sql_injections.login_hardened()
                 print(f"Debug - Login query: {query}")  # Debug print
@@ -1412,6 +1427,9 @@ def hashed_pass():
     Allows the user to view the passwords for the
     hashing demo
     """
+    cur = None
+    conn = None
+
     try:
         conn = psycopg2.connect(
         dbname=os.getenv("DB_NAME"),
@@ -1430,9 +1448,6 @@ def hashed_pass():
 
         rows = cur.fetchall()
 
-        cur.close()
-        conn.close()
-
         return jsonify(rows)
 
     except Exception as e:
@@ -1441,6 +1456,11 @@ def hashed_pass():
             'status': 'error',
             'message': str(e)
         }), 500
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
 
 
 # Forgot password endpoint
