@@ -42,4 +42,9 @@ def test_get_transaction_history_bola_hardened(client, setup_test_db):
     # Should be forbidden or error
     assert res.status_code == 403
     assert data["status"] == "error"
-    assert "not authorized" in data["message"].lower() or "access denied" in data["message"].lower() or "not found" in data["message"].lower()
+    assert (
+    "not authorized" in data["message"].lower()
+    or "access denied" in data["message"].lower()
+    or "not found" in data["message"].lower()
+    )
+    
