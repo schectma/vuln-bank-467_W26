@@ -10,5 +10,5 @@ Tests merged to a working branch in the GitHub repo will run automatically upon 
 1. `docker-compose -f docker-compose-test.yml down -v --remove-orphans`
 2. `docker-compose -f docker-compose-test.yml up -d --build`
 3. `docker exec -it <container_name> pytest -v`
-The value of `<continer_name>` is usually `vuln-bank-467_w26_web_1`. Run `docker ps` to verify then paste/replace in above command if necessary.
+The value of `<container_name>` is usually `vuln-bank-467_w26_web_1`. Run `docker ps` to verify then paste/replace in above command if necessary.
 ![alt text](./screenshots/test-local.png)
