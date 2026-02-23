@@ -2347,14 +2347,24 @@ def create_bill_payment(current_user):
         # Vulnerability: No payment method validation
         
         if payment_method == 'virtual_card' and card_id:
-            # Vulnerability: BOLA - no verification if card belongs to user
-            # Vulnerability: SQL injection possible
-            card_query = f"""
-                SELECT current_balance, card_limit, is_frozen 
-                FROM virtual_cards 
-                WHERE id = {card_id}
-            """
-            card = execute_query(card_query)[0]
+            if harden:
+                card_query = BOLA.create_bill_payment_hardened()
+                card_result = execute_query(card_query,(card_id, current_user['user_id']))
+                if not card_result:
+                    return jsonify({
+                    'status': 'error',
+                    'message': 'Card not found or access denied'
+                }), 403
+                card = card_result[0]
+            else:
+                # Vulnerability: BOLA - no verification if card belongs to user
+                # Vulnerability: SQL injection possible
+                card_query = f"""
+                    SELECT current_balance, card_limit, is_frozen 
+                    FROM virtual_cards 
+                    WHERE id = {card_id}
+                """
+                card = execute_query(card_query)[0]
             
             if card[2]:  # is_frozen
                 return jsonify({
