@@ -8,18 +8,25 @@ Browser access to functioning web app and two registered user accounts, at least
 
 ***Important Note***
 
-Complete setup of at least one VC is necessary for pentesting and only achievable via CLI.
-1. Create VC via web app UI.
-2. Issue the following bash command in the backend CLI: `psql -U vuln_user -d vulnerable_bank -h localhost -W`
-3. Type the database password shown in the .env file, then press enter.
-4. Issue the following SQL command: 'UPDATE virtual_cards SET current_balance = current_balance + 100 WHERE id = <card_id>;'
-- Variable <card_id> is the id value of the target card. These are zero indexed and can be identified by issuing the following command in the browser console: 'const token = localStorage.getItem('jwt_token');
-fetch('/api/virtual-cards', {
-  headers: { Authorization: 'Bearer ' + token }
-}).then(r => r.json()).then(d => {
-  console.log('Cards:', d.cards);
-});'
-![alt text](./screenshots/image-7.png)
+Complete setup of at least one VC is necessary for pentesting:
+1. Create VC via web app UI. Set the limit to 1000.
+2. Open the browser console and execute the following command:
+    `const token = localStorage.getItem('jwt_token');
+    fetch('/api/virtual-cards/<vc_num>/update-limit', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: 'Bearer ' + token
+        },
+        body: JSON.stringify({
+            current_balance: 1000.00
+        })
+    })
+    .then(r => r.json())
+    .then(console.log);`
+<vc_num> should be `1` if this instance of the web app is fresh and the VC added above is the first and only.
+
+3. Refresh the page, scroll down, and confirm VC balance if desired.
 
 ## Demonstrations
 This vulnerability is present in six different functions within app.py. Steps for exploitation and verification of hardening are as follows.
