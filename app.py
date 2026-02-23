@@ -20,8 +20,7 @@ from urllib.parse import urlparse
 import platform
 import psycopg2
 import secrets
-import flask
-from mitigations import BOLA, MA
+from mitigations import BOLA, MA, SSRF
 from mitigations import sql_injections
 from mitigations import session_exp
 from mitigations import SSRF
@@ -83,9 +82,6 @@ INFORMATION_DISCLOSURE_PROTECTION = os.getenv('INFORMATION_DISCLOSURE_PROTECTION
 
 # Mass Assignment Protection
 MASS_ASSIGNMENT_PROTECTION = os.getenv('MASS_ASSIGNMENT_PROTECTION', 'false').lower() == 'true'
-
-# Server-Side Request Forgery (SSRF) Protection
-SSRF_PROTECTION = os.getenv('SSRF_PROTECTION', 'false').lower() == 'true'
 
 # Password Hashing
 PASSWORD_HASHING_ENABLED = os.getenv('PASSWORD_HASHING_ENABLED', 'false').lower() == 'true'
@@ -411,6 +407,7 @@ def forge_jwt_tool():
     return flask.send_from_directory('.', 'forge_jwt.html')
 
 @app.route('/register', methods=['GET', 'POST'])
+@ip_rate_limit(prefix="register", limit=5)
 def register():
     if request.method == 'POST':
         try:
@@ -436,10 +433,19 @@ def register():
                 # HARDENED: registration field whitelist
                 ALLOWED_REGISTRATION_FIELDS = ['username', 'password']
 
-            # Build dynamic query based on user input fields
-            # Vulnerability: Mass Assignment possible here
-            fields = ['username', 'password', 'account_number']
-            values = [user_data.get('username'), user_data.get('password'), account_number]
+            if app.config.get("HASHMODE", 0) in (1, 2, 3, 4):
+                fields = ['username', 'password', 'account_number']
+                # Hash the password before storing
+                values = [user_data.get('username'), hashing.create_hashed_password(user_data.get('password')), account_number]
+
+            else:
+                # Build dynamic query based on user input fields
+                # Vulnerability: Mass Assignment possible here
+                fields = ['username', 'password', 'account_number']
+                values = [user_data.get('username'), user_data.get('password'), account_number]
+
+            # Save plaintext version
+            hashing.save_plaintext(user_data.get('username'), user_data.get('password'))
             
             if harden:
                 # HARDEN: validate input against whitelist
@@ -529,7 +535,12 @@ def login():
             
             print(f"Login attempt - Username: {username}")  # Debug print
 
-            if harden:
+            if app.config.get("HASHMODE", 0) in (1, 2, 3, 4):
+                # Returns user information from database
+                user_row = hashing.hashed_login(username, password)
+                # user_row will be returned if valid password/username
+                user = [user_row] if user_row else []
+            elif harden:
                 # Fixes SQL injection vulnerability
                 query = sql_injections.login_hardened()
                 print(f"Debug - Login query: {query}")  # Debug print
@@ -913,57 +924,28 @@ def upload_profile_picture_url(current_user):
         if not image_url:
             return jsonify({'status': 'error', 'message': 'image_url is required'}), 400
 
-        # SSRF Protection Toggle
-        if SSRF_PROTECTION:
-            # Protected: Validate URL scheme and block private/internal addresses
-            parsed = urlparse(image_url)
-
-            # Only allow http/https
-            if parsed.scheme not in ['http', 'https']:
-                return jsonify({
-                    'status': 'error',
-                    'message': 'Only http and https protocols are allowed'
-                }), 400
-
-            # Block private IP ranges and localhost
-            hostname = parsed.hostname
-            if not hostname:
-                return jsonify({'status': 'error', 'message': 'Invalid URL'}), 400
-
-            # Block common internal/metadata endpoints
-            blocked_patterns = [
-                'localhost', '127.0.0.1', '0.0.0.0',
-                '169.254.169.254',  # AWS metadata
-                '::1',  # IPv6 localhost
-                '10.', '172.16.', '192.168.',  # Private IP ranges
-                'metadata.google.internal'  # GCP metadata
-            ]
-
-            if any(hostname.startswith(pattern) or hostname == pattern.rstrip('.') for pattern in blocked_patterns):
-                return jsonify({
-                    'status': 'error',
-                    'message': 'Access to internal/private addresses is not allowed'
-                }), 403
-
-            # Protected: Enable SSL verification, don't follow redirects
-            resp = requests.get(image_url, timeout=10, allow_redirects=False, verify=True)
+        if harden:
+            filename, file_path = SSRF.fetch_and_store_image(image_url, UPLOAD_FOLDER)
         else:
-            # Vulnerable: No URL validation, SSL verification disabled, follows redirects
-            # Allows SSRF attacks to access internal services, cloud metadata, etc.
+            # Vulnerabilities:
+            # - No URL scheme/host allowlist (SSRF)
+            # - SSL verification disabled
+            # - Follows redirects
+            # - No content-type or size validation
             resp = requests.get(image_url, timeout=10, allow_redirects=True, verify=False)
-        if resp.status_code >= 400:
-            return jsonify({'status': 'error', 'message': f'Failed to fetch URL: HTTP {resp.status_code}'}), 400
+            if resp.status_code >= 400:
+                return jsonify({'status': 'error', 'message': f'Failed to fetch URL: HTTP {resp.status_code}'}), 400
 
-        # Derive filename from URL path (user-controlled)
-        parsed = urlparse(image_url)
-        basename = os.path.basename(parsed.path) or 'downloaded'
-        filename = secure_filename(basename)
-        filename = f"{random.randint(1, 1000000)}_{filename}"
-        file_path = os.path.join(UPLOAD_FOLDER, filename)
+            # Derive filename from URL path (user-controlled)
+            parsed = urlparse(image_url)
+            basename = os.path.basename(parsed.path) or 'downloaded'
+            filename = secure_filename(basename)
+            filename = f"{random.randint(1, 1000000)}_{filename}"
+            file_path = os.path.join(UPLOAD_FOLDER, filename)
 
-        # Save content directly without validation
-        with open(file_path, 'wb') as f:
-            f.write(resp.content)
+            # Save content directly without validation
+            with open(file_path, 'wb') as f:
+                f.write(resp.content)
 
         # Store just the filename in DB (same pattern as file upload)
         execute_query(
@@ -978,20 +960,16 @@ def upload_profile_picture_url(current_user):
             'file_path': os.path.join('static/uploads', filename),
             'debug_info': {  # Information disclosure for learning
                 'fetched_url': image_url,
-                'http_status': resp.status_code,
-                'content_length': len(resp.content)
+                'http_status': resp.status_code if not harden else 200,
+                'content_length': len(resp.content) if not harden else None
             }
         })
     except Exception as e:
         print(f"URL image import error: {str(e)}")
-        return format_error_response(
-            e,
-            500,
-            include_debug={
-                'endpoint': 'upload_profile_picture_url',
-                'error_details': str(e)
-            }
-        )
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
 
 # INTERNAL-ONLY ENDPOINTS FOR SSRF DEMO (INTENTIONALLY SENSITIVE)
 def _is_loopback_request():
@@ -1324,6 +1302,11 @@ def create_admin(current_user):
         username = data.get('username')
         password = data.get('password')
         account_number = generate_account_number()
+        # Save plaintext version
+        hashing.save_plaintext(data.get('username'), data.get('password'))
+
+        if app.config.get("HASHMODE", 0) in (1, 2, 3, 4):
+            password = hashing.create_hashed_password(data.get('password'))
 
         if harden:
             # Fixes SQL injection
@@ -1449,6 +1432,9 @@ def hashed_pass():
     Allows the user to view the passwords for the
     hashing demo
     """
+    cur = None
+    conn = None
+
     try:
         conn = psycopg2.connect(
         dbname=os.getenv("DB_NAME"),
@@ -1467,9 +1453,6 @@ def hashed_pass():
 
         rows = cur.fetchall()
 
-        cur.close()
-        conn.close()
-
         return jsonify(rows)
 
     except Exception as e:
@@ -1478,6 +1461,11 @@ def hashed_pass():
             'status': 'error',
             'message': str(e)
         }), 500
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
 
 
 # Forgot password endpoint
@@ -2771,7 +2759,6 @@ def security_config():
             'authorization_enabled': True,
             'information_disclosure_protection': True,
             'mass_assignment_protection': True,
-            'ssrf_protection': True,
             'password_hashing_enabled': True,
             'file_upload_validation': True,
             'ai_prompt_injection_protection': True
@@ -2785,7 +2772,6 @@ def security_config():
         'authorization_enabled': AUTHORIZATION_ENABLED,
         'information_disclosure_protection': INFORMATION_DISCLOSURE_PROTECTION,
         'mass_assignment_protection': MASS_ASSIGNMENT_PROTECTION,
-        'ssrf_protection': SSRF_PROTECTION,
         'password_hashing_enabled': PASSWORD_HASHING_ENABLED,
         'file_upload_validation': FILE_UPLOAD_VALIDATION,
         'ai_prompt_injection_protection': AI_PROMPT_INJECTION_PROTECTION
