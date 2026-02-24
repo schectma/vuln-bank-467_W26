@@ -5,6 +5,8 @@ from app import app as flask_app
 from database import init_connection_pool, init_db
 import app as app_module
 from helper import toggle_harden
+from contextlib import contextmanager
+from urllib.parse import urlparse
 
 
 @pytest.fixture
@@ -110,6 +112,31 @@ def hardened_user_client(client, setup_test_db):
     )
 
 
+@contextmanager
+def pg_connect(dsn, autocommit=True):
+    """
+    Context manager
+    Connect to PostgreSQL and allow autocommit
+    Ensures that connection is always closed
+    """
+    conn = None
+    try:
+        conn = psycopg2.connect(dsn)
+        conn.autocommit = autocommit
+        # Will close cur automatically so not needed in finally
+        with conn.cursor() as cur:
+            yield conn, cur
+    except psycopg2.Error:
+        # If performing transaction, rollback changes
+        # so that there are not partial changes to database
+        if conn and not autocommit:
+            conn.rollback()
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
 # Create test database
 @pytest.fixture(scope="session", autouse=True)
 def ensure_test_db():
@@ -120,95 +147,94 @@ def ensure_test_db():
     main_db_url = os.getenv("DATABASE_URL")
     test_db_url = os.getenv("TEST_DATABASE_URL")
 
-    assert main_db_url, "DATABASE_URL not set"
-    assert test_db_url, "TEST_DATABASE_URL not set"
+    if not main_db_url or not test_db_url:
+        print("[pytest] Missing env var, skipping DB setup.")
+        yield
+        return
 
-    # Connect to main postgres server
-    conn = psycopg2.connect(main_db_url)
-    conn.autocommit = True
-    cur = conn.cursor()
+    # To get database name from url
+    # Handles url if there are parameters
+    test_db_name = urlparse(test_db_url).path.lstrip("/")
 
-    test_db_name = test_db_url.split("/")[-1]
-
-    cur.execute("SELECT 1 FROM pg_database WHERE datname=%s", (test_db_name,))
-    exists = cur.fetchone()
-
-    if not exists:
-        cur.execute(f"CREATE DATABASE {test_db_name};")
-        print(f"[pytest] Created test database: {test_db_name}")
-
-    cur.close()
-    conn.close()
+    # To setup the test database
+    try:
+        with pg_connect(main_db_url) as (conn, cur):
+            cur.execute(
+                "SELECT 1 FROM pg_database WHERE datname=%s",
+                (test_db_name,),
+            )
+            if not cur.fetchone():
+                cur.execute(f"CREATE DATABASE {test_db_name};")
+                print(f"[pytest] Created test database: {test_db_name}")
+    except psycopg2.Error as e:
+        print(f"[pytest] DB setup failed: {e}")
 
     yield
 
-    # Delete the test database
-    conn = psycopg2.connect(main_db_url)
-    conn.autocommit = True
-    cur = conn.cursor()
-
-    # Disconnect users from DB before dropping
-    cur.execute("""
-        SELECT pg_terminate_backend(pid)
-        FROM pg_stat_activity
-        WHERE datname = %s;
-    """, (test_db_name,))
-
-    cur.execute(f"DROP DATABASE IF EXISTS {test_db_name};")
-    print(f"[pytest] Dropped test database: {test_db_name}")
-
-    cur.close()
-    conn.close()
+    try:
+        with pg_connect(main_db_url) as (conn, cur):
+            cur.execute("""
+                SELECT pg_terminate_backend(pid)
+                FROM pg_stat_activity
+                WHERE datname = %s;
+            """, (test_db_name,))
+            cur.execute(f"DROP DATABASE IF EXISTS {test_db_name};")
+            print(f"[pytest] Dropped test database: {test_db_name}")
+    except psycopg2.Error as e:
+        print(f"[pytest] Warning: failed to drop test database: {e}")
 
 
 # Add whatever information needs to be in the test database here
 @pytest.fixture(scope="function")
 def setup_test_db():
+    """
+    Sets up the testing database
+    """
     # Clear rate limiting state before each test
     app_module.rate_limit_storage.clear()
     # Runs before each test
     db_url = os.getenv("TEST_DATABASE_URL")
-    assert db_url, "TEST_DATABASE_URL not set"
+    if not db_url:
+        pytest.fail("TEST_DATABASE_URL missing")
 
-    conn = psycopg2.connect(db_url)
-    cur = conn.cursor()
+    try:
+        with pg_connect(db_url, autocommit=False) as (conn, cur):
+            # Ensure users table exists
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id SERIAL PRIMARY KEY,
+                    username TEXT NOT NULL UNIQUE,
+                    password TEXT NOT NULL,
+                    account_number TEXT NOT NULL UNIQUE,
+                    balance DECIMAL(15, 2) DEFAULT 1000.0,
+                    is_admin BOOLEAN DEFAULT FALSE,
+                    profile_picture TEXT,
+                    reset_pin TEXT
+                );
+            """)
 
-    # Ensure users table exists
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id SERIAL PRIMARY KEY,
-            username TEXT NOT NULL UNIQUE,
-            password TEXT NOT NULL,
-            account_number TEXT NOT NULL UNIQUE,
-            balance DECIMAL(15, 2) DEFAULT 1000.0,
-            is_admin BOOLEAN DEFAULT FALSE,
-            profile_picture TEXT,
-            reset_pin TEXT
-        );
-    """)
+            # Reset table data
+            cur.execute("TRUNCATE TABLE users RESTART IDENTITY CASCADE;")
 
-    # Reset table data
-    cur.execute("TRUNCATE TABLE users RESTART IDENTITY CASCADE;")
+            # Insert known test users
+            cur.execute("""
+                INSERT INTO users (
+                    username,
+                    password,
+                    account_number,
+                    balance,
+                    is_admin
+                )
+                VALUES
+                    ('admin', 'admin123', 'ADMIN001', 1000000.0, True),
+                    ('testuser1', 'testpassword1', 'TEST001', 1000.0, False),
+                    ('testuser2', 'testpassword2', 'TEST002', 1000.0, False),
+                    ('testuser3', 'testpassword3', 'TEST003', 1000.0, False);
+            """)
 
-    # Insert known test users
-    cur.execute("""
-        INSERT INTO users (
-        username,
-        password,
-        account_number,
-        balance,
-        is_admin
-        )
-        VALUES
-        ('admin', 'admin123', 'ADMIN001', 1000000.0, True),
-        ('testuser1', 'testpassword1', 'TEST001', 1000.0, False),
-        ('testuser2', 'testpassword2', 'TEST002', 1000.0, False),
-        ('testuser3', 'testpassword3', 'TEST003', 1000.0, False);
-    """)
-
-    conn.commit()
-    cur.close()
-    conn.close()
+            conn.commit()
+    except psycopg2.Error as e:
+        pytest.fail(f"[pytest] Test DB setup failed: {e}")
 
     yield
 
@@ -275,6 +301,23 @@ def setup_virtual_cards_db():
     conn = psycopg2.connect(db_url)
     cur = conn.cursor()
 
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS virtual_cards (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+            card_number TEXT NOT NULL UNIQUE,
+            cvv TEXT NOT NULL,
+            expiry_date TEXT NOT NULL,
+            card_limit DECIMAL(15, 2) DEFAULT 1000.0,
+            current_balance DECIMAL(15, 2) DEFAULT 0.0,
+            is_frozen BOOLEAN DEFAULT FALSE,
+            is_active BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_used_at TIMESTAMP,
+            card_type TEXT DEFAULT 'standard'
+        );
+    """)
+
     cur.execute("TRUNCATE TABLE virtual_cards RESTART IDENTITY CASCADE;")
 
     cur.execute("""
@@ -331,8 +374,27 @@ def setup_bill_payments_db():
     conn = psycopg2.connect(db_url)
     cur = conn.cursor()
 
-    # Seed one virtual card for testuser1 to use in a card payment
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS bill_payments (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+            biller_id INTEGER REFERENCES billers(id),
+            amount DECIMAL(15, 2) NOT NULL,
+            payment_method TEXT NOT NULL,
+            card_id INTEGER REFERENCES virtual_cards(id),
+            reference_number TEXT,
+            status TEXT DEFAULT 'pending',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            processed_at TIMESTAMP,
+            description TEXT
+        );
+    """)
+
+    # Truncate dependent table first, then parent
+    cur.execute("TRUNCATE TABLE bill_payments RESTART IDENTITY CASCADE;")
     cur.execute("TRUNCATE TABLE virtual_cards RESTART IDENTITY CASCADE;")
+
+    # Seed one virtual card for testuser1 to use in a card payment
     cur.execute("""
         INSERT INTO virtual_cards
             (
@@ -341,6 +403,7 @@ def setup_bill_payments_db():
             cvv,
             expiry_date,
             card_limit,
+            current_balance,
             card_type,
             is_frozen
             )
@@ -351,12 +414,12 @@ def setup_bill_payments_db():
             '123',
             '12/26',
             1000.00,
+            1000.00,
             'standard',
             FALSE
             );
     """)
 
-    cur.execute("TRUNCATE TABLE bill_payments RESTART IDENTITY CASCADE;")
     cur.execute("""
         INSERT INTO bill_payments
             (
