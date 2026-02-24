@@ -114,7 +114,8 @@ def hardened_user_client(client, setup_test_db):
 @contextmanager
 def pg_connect(dsn, autocommit=True):
     """
-    Connect to PostgreSQL with autocommit, ensuring cleanup.
+    Connect to PostgreSQL with autocommit.
+    Ensures cleanup
     """
     conn = None
     try:
