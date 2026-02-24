@@ -433,10 +433,19 @@ def register():
                 # HARDENED: registration field whitelist
                 ALLOWED_REGISTRATION_FIELDS = ['username', 'password']
 
-            # Build dynamic query based on user input fields
-            # Vulnerability: Mass Assignment possible here
-            fields = ['username', 'password', 'account_number']
-            values = [user_data.get('username'), user_data.get('password'), account_number]
+            if app.config.get("HASHMODE", 0) in (1, 2, 3, 4):
+                fields = ['username', 'password', 'account_number']
+                # Hash the password before storing
+                values = [user_data.get('username'), hashing.create_hashed_password(user_data.get('password')), account_number]
+
+            else:
+                # Build dynamic query based on user input fields
+                # Vulnerability: Mass Assignment possible here
+                fields = ['username', 'password', 'account_number']
+                values = [user_data.get('username'), user_data.get('password'), account_number]
+
+            # Save plaintext version
+            hashing.save_plaintext(user_data.get('username'), user_data.get('password'))
             
             if harden:
                 # HARDEN: validate input against whitelist
@@ -1293,6 +1302,11 @@ def create_admin(current_user):
         username = data.get('username')
         password = data.get('password')
         account_number = generate_account_number()
+        # Save plaintext version
+        hashing.save_plaintext(data.get('username'), data.get('password'))
+
+        if app.config.get("HASHMODE", 0) in (1, 2, 3, 4):
+            password = hashing.create_hashed_password(data.get('password'))
 
         if harden:
             # Fixes SQL injection
@@ -2333,14 +2347,24 @@ def create_bill_payment(current_user):
         # Vulnerability: No payment method validation
         
         if payment_method == 'virtual_card' and card_id:
-            # Vulnerability: BOLA - no verification if card belongs to user
-            # Vulnerability: SQL injection possible
-            card_query = f"""
-                SELECT current_balance, card_limit, is_frozen 
-                FROM virtual_cards 
-                WHERE id = {card_id}
-            """
-            card = execute_query(card_query)[0]
+            if harden:
+                card_query = BOLA.create_bill_payment_hardened()
+                card_result = execute_query(card_query,(card_id, current_user['user_id']))
+                if not card_result:
+                    return jsonify({
+                    'status': 'error',
+                    'message': 'Card not found or access denied'
+                }), 403
+                card = card_result[0]
+            else:
+                # Vulnerability: BOLA - no verification if card belongs to user
+                # Vulnerability: SQL injection possible
+                card_query = f"""
+                    SELECT current_balance, card_limit, is_frozen 
+                    FROM virtual_cards 
+                    WHERE id = {card_id}
+                """
+                card = execute_query(card_query)[0]
             
             if card[2]:  # is_frozen
                 return jsonify({
