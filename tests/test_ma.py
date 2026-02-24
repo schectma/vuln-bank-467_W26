@@ -1,5 +1,6 @@
 from helper import toggle_harden
 
+
 def test_update_card_limit_ma_hardened(client, setup_test_db):
     """Verify that only allowed fields can be updated when MA mitigation is enabled."""
     toggle_harden(True)
