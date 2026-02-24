@@ -281,6 +281,23 @@ def setup_virtual_cards_db():
     conn = psycopg2.connect(db_url)
     cur = conn.cursor()
 
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS virtual_cards (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+            card_number TEXT NOT NULL UNIQUE,
+            cvv TEXT NOT NULL,
+            expiry_date TEXT NOT NULL,
+            card_limit DECIMAL(15, 2) DEFAULT 1000.0,
+            current_balance DECIMAL(15, 2) DEFAULT 0.0,
+            is_frozen BOOLEAN DEFAULT FALSE,
+            is_active BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_used_at TIMESTAMP,
+            card_type TEXT DEFAULT 'standard'
+        );
+    """)
+
     cur.execute("TRUNCATE TABLE virtual_cards RESTART IDENTITY CASCADE;")
 
     cur.execute("""
@@ -338,6 +355,22 @@ def setup_bill_payments_db():
     conn = psycopg2.connect(db_url)
     cur = conn.cursor()
 
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS bill_payments (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+            biller_id INTEGER REFERENCES billers(id),
+            amount DECIMAL(15, 2) NOT NULL,
+            payment_method TEXT NOT NULL,
+            card_id INTEGER REFERENCES virtual_cards(id),
+            reference_number TEXT,
+            status TEXT DEFAULT 'pending',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            processed_at TIMESTAMP,
+            description TEXT
+        );
+    """)
+
     # Seed one virtual card for testuser1 to use in a card payment
     cur.execute("TRUNCATE TABLE virtual_cards RESTART IDENTITY CASCADE;")
     cur.execute("""
@@ -348,6 +381,7 @@ def setup_bill_payments_db():
             cvv,
             expiry_date,
             card_limit,
+            current_balance,
             card_type,
             is_frozen
             )
@@ -357,6 +391,7 @@ def setup_bill_payments_db():
             '1111222233334444',
             '123',
             '12/26',
+            1000.00,
             1000.00,
             'standard',
             FALSE
