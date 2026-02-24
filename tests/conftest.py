@@ -188,7 +188,7 @@ def ensure_test_db():
 @pytest.fixture(scope="function")
 def setup_test_db():
     """
-    Sets up the testing database
+    Sets up the users testing table
     """
     # Clear rate limiting state before each test
     app_module.rate_limit_storage.clear()
@@ -242,7 +242,7 @@ def setup_test_db():
 
 
 @pytest.fixture
-def setup_transactions_db():
+def setup_transactions_db(setup_test_db):
     """
     Creates a test transactions database
 
@@ -251,41 +251,68 @@ def setup_transactions_db():
             res = user_client.get("/api/transactions?account_number=TEST001")
     """
     db_url = os.getenv("TEST_DATABASE_URL")
-    conn = psycopg2.connect(db_url)
-    cur = conn.cursor()
 
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS transactions (
-            id SERIAL PRIMARY KEY,
-            from_account TEXT NOT NULL,
-            to_account TEXT NOT NULL,
-            amount DECIMAL(15, 2) NOT NULL,
-            timestamp TIMESTAMP DEFAULT NOW(),
-            transaction_type TEXT NOT NULL,
-            description TEXT
-        );
-    """)
+    if not db_url:
+        pytest.fail("TEST_DATABASE_URL missing")
 
-    cur.execute("TRUNCATE TABLE transactions RESTART IDENTITY;")
+    try:
+        with pg_connect(db_url, autocommit=False) as (conn, cur):
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS transactions (
+                    id SERIAL PRIMARY KEY,
+                    from_account TEXT NOT NULL,
+                    to_account TEXT NOT NULL,
+                    amount DECIMAL(15, 2) NOT NULL,
+                    timestamp TIMESTAMP DEFAULT NOW(),
+                    transaction_type TEXT NOT NULL,
+                    description TEXT
+                );
+            """)
 
-    cur.execute("""
-        INSERT INTO transactions
-            (from_account, to_account, amount, transaction_type, description)
-        VALUES
-            ('TEST001', 'TEST002', 100.00, 'transfer', 'Test transfer 1'),
-            ('TEST002', 'TEST001', 50.00,  'transfer', 'Test transfer 2'),
-            ('TEST001', 'TEST003', 25.00,  'transfer', 'Test transfer 3');
-    """)
+            cur.execute("TRUNCATE TABLE transactions RESTART IDENTITY;")
 
-    conn.commit()
-    cur.close()
-    conn.close()
+            cur.execute("""
+                INSERT INTO transactions (
+                    from_account,
+                    to_account,
+                    amount,
+                    transaction_type,
+                    description
+                )
+                VALUES
+                    (
+                        'TEST001',
+                        'TEST002',
+                        100.00,
+                        'transfer',
+                        'Test transfer 1'
+                    ),
+                    (
+                        'TEST002',
+                        'TEST001',
+                        50.00,
+                        'transfer',
+                        'Test transfer 2'
+                    ),
+                    (
+                        'TEST001',
+                        'TEST003',
+                        25.00,
+                        'transfer',
+                        'Test transfer 3'
+                    );
+            """)
+
+            conn.commit()
+
+    except psycopg2.Error as e:
+        pytest.fail(f"[pytest] Test transactions DB setup failed: {e}")
 
     yield
 
 
 @pytest.fixture
-def setup_virtual_cards_db():
+def setup_virtual_cards_db(setup_test_db):
     """
     Sets the virtual_cards table
 
@@ -298,71 +325,75 @@ def setup_virtual_cards_db():
             res = user_client.post("/api/virtual-cards/1/toggle-freeze")
     """
     db_url = os.getenv("TEST_DATABASE_URL")
-    conn = psycopg2.connect(db_url)
-    cur = conn.cursor()
+    if not db_url:
+        pytest.fail("TEST_DATABASE_URL missing")
 
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS virtual_cards (
-            id SERIAL PRIMARY KEY,
-            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-            card_number TEXT NOT NULL UNIQUE,
-            cvv TEXT NOT NULL,
-            expiry_date TEXT NOT NULL,
-            card_limit DECIMAL(15, 2) DEFAULT 1000.0,
-            current_balance DECIMAL(15, 2) DEFAULT 0.0,
-            is_frozen BOOLEAN DEFAULT FALSE,
-            is_active BOOLEAN DEFAULT TRUE,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            last_used_at TIMESTAMP,
-            card_type TEXT DEFAULT 'standard'
-        );
-    """)
+    try:
+        with pg_connect(db_url, autocommit=False) as (conn, cur):
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS virtual_cards (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                    card_number TEXT NOT NULL UNIQUE,
+                    cvv TEXT NOT NULL,
+                    expiry_date TEXT NOT NULL,
+                    card_limit DECIMAL(15, 2) DEFAULT 1000.0,
+                    current_balance DECIMAL(15, 2) DEFAULT 0.0,
+                    is_frozen BOOLEAN DEFAULT FALSE,
+                    is_active BOOLEAN DEFAULT TRUE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_used_at TIMESTAMP,
+                    card_type TEXT DEFAULT 'standard'
+                );
+            """)
 
-    cur.execute("TRUNCATE TABLE virtual_cards RESTART IDENTITY CASCADE;")
+            cur.execute("""
+                TRUNCATE TABLE virtual_cards RESTART IDENTITY CASCADE;
+            """)
 
-    cur.execute("""
-        INSERT INTO virtual_cards(
-            user_id,
-            card_number,
-            cvv,
-            expiry_date,
-            card_limit,
-            current_balance,
-            card_type,
-            is_frozen
-        )
-        VALUES
-            (
-            2,
-            '1111222233334444',
-            '123',
-            '12/26',
-            1000.00,
-            1000.00,
-            'standard',
-            FALSE
-            ),
-            (
-            3,
-            '5555666677778888',
-            '456',
-            '12/26',
-            1000.00,
-            1000.00,
-            'standard',
-            FALSE
-            );
-    """)
+            cur.execute("""
+                INSERT INTO virtual_cards(
+                    user_id,
+                    card_number,
+                    cvv,
+                    expiry_date,
+                    card_limit,
+                    current_balance,
+                    card_type,
+                    is_frozen
+                )
+                VALUES
+                    (
+                    2,
+                    '1111222233334444',
+                    '123',
+                    '12/26',
+                    1000.00,
+                    1000.00,
+                    'standard',
+                    FALSE
+                    ),
+                    (
+                    3,
+                    '5555666677778888',
+                    '456',
+                    '12/26',
+                    1000.00,
+                    1000.00,
+                    'standard',
+                    FALSE
+                    );
+            """)
 
-    conn.commit()
-    cur.close()
-    conn.close()
+            conn.commit()
+    except psycopg2.Error as e:
+        pytest.fail(f"[pytest] Test DB setup failed: {e}")
 
     yield
 
 
 @pytest.fixture
-def setup_bill_payments_db():
+def setup_bill_payments_db(setup_test_db):
     """
     Sets the bill payments table.
 
@@ -371,125 +402,135 @@ def setup_bill_payments_db():
             res = user_client.get("/api/bill-payments/history")
     """
     db_url = os.getenv("TEST_DATABASE_URL")
-    conn = psycopg2.connect(db_url)
-    cur = conn.cursor()
+    if not db_url:
+        pytest.fail("TEST_DATABASE_URL missing")
 
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS bill_payments (
-            id SERIAL PRIMARY KEY,
-            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-            biller_id INTEGER REFERENCES billers(id),
-            amount DECIMAL(15, 2) NOT NULL,
-            payment_method TEXT NOT NULL,
-            card_id INTEGER REFERENCES virtual_cards(id),
-            reference_number TEXT,
-            status TEXT DEFAULT 'pending',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            processed_at TIMESTAMP,
-            description TEXT
-        );
-    """)
+    try:
+        with pg_connect(db_url, autocommit=False) as (conn, cur):
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS bill_payments (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                    biller_id INTEGER REFERENCES billers(id),
+                    amount DECIMAL(15, 2) NOT NULL,
+                    payment_method TEXT NOT NULL,
+                    card_id INTEGER REFERENCES virtual_cards(id),
+                    reference_number TEXT,
+                    status TEXT DEFAULT 'pending',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    processed_at TIMESTAMP,
+                    description TEXT
+                );
+            """)
 
-    # Truncate dependent table first, then parent
-    cur.execute("TRUNCATE TABLE bill_payments RESTART IDENTITY CASCADE;")
-    cur.execute("TRUNCATE TABLE virtual_cards RESTART IDENTITY CASCADE;")
+            # Truncate dependent table first, then parent
+            cur.execute("""
+                TRUNCATE TABLE bill_payments RESTART IDENTITY CASCADE;
+            """)
+            cur.execute("""
+                TRUNCATE TABLE virtual_cards RESTART IDENTITY CASCADE;
+            """)
 
-    # Seed one virtual card for testuser1 to use in a card payment
-    cur.execute("""
-        INSERT INTO virtual_cards
-            (
-            user_id,
-            card_number,
-            cvv,
-            expiry_date,
-            card_limit,
-            current_balance,
-            card_type,
-            is_frozen
-            )
-        VALUES
-            (
-            2,
-            '1111222233334444',
-            '123',
-            '12/26',
-            1000.00,
-            1000.00,
-            'standard',
-            FALSE
-            );
-    """)
+            # Seed one virtual card for testuser1 to use in a card payment
+            cur.execute("""
+                INSERT INTO virtual_cards
+                    (
+                    user_id,
+                    card_number,
+                    cvv,
+                    expiry_date,
+                    card_limit,
+                    current_balance,
+                    card_type,
+                    is_frozen
+                    )
+                VALUES
+                    (
+                    2,
+                    '1111222233334444',
+                    '123',
+                    '12/26',
+                    1000.00,
+                    1000.00,
+                    'standard',
+                    FALSE
+                    );
+            """)
 
-    cur.execute("""
-        INSERT INTO bill_payments
-            (
-            user_id,
-            biller_id,
-            amount,
-            payment_method,
-            card_id,
-            reference_number,
-            status,
-            description
-            )
-        VALUES
-            (
-            2,
-            1,
-            75.00,
-            'balance',
-            NULL,
-            'REF001',
-            'completed',
-            'Water bill payment'
-            ),
-            (2,
-            2,
-            120.00,
-            'virtual_card',
-            1,
-            'REF002',
-            'completed',
-            'Electric bill payment'
-            );
-    """)
+            cur.execute("""
+                INSERT INTO bill_payments
+                    (
+                    user_id,
+                    biller_id,
+                    amount,
+                    payment_method,
+                    card_id,
+                    reference_number,
+                    status,
+                    description
+                    )
+                VALUES
+                    (
+                    2,
+                    1,
+                    75.00,
+                    'balance',
+                    NULL,
+                    'REF001',
+                    'completed',
+                    'Water bill payment'
+                    ),
+                    (2,
+                    2,
+                    120.00,
+                    'virtual_card',
+                    1,
+                    'REF002',
+                    'completed',
+                    'Electric bill payment'
+                    );
+            """)
 
-    conn.commit()
-    cur.close()
-    conn.close()
+            conn.commit()
+
+    except psycopg2.Error as e:
+        pytest.fail(f"[pytest] Test DB setup failed: {e}")
 
     yield
 
 
 @pytest.fixture(scope="function")
-def setup_plaintext_db():
+def setup_plaintext_db(setup_test_db):
     """
     Creates and seeds users_plaintext with the test users
     so that create_hashing_db() only updates existing users
     """
     db_url = os.getenv("TEST_DATABASE_URL")
-    conn = psycopg2.connect(db_url)
-    cur = conn.cursor()
+    if not db_url:
+        pytest.fail("TEST_DATABASE_URL missing")
 
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS users_plaintext (
-            username TEXT PRIMARY KEY,
-            password TEXT NOT NULL
-        );
-    """)
+    try:
+        with pg_connect(db_url, autocommit=False) as (conn, cur):
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS users_plaintext (
+                    username TEXT PRIMARY KEY,
+                    password TEXT NOT NULL
+                );
+            """)
 
-    cur.execute("TRUNCATE TABLE users_plaintext;")
+            cur.execute("TRUNCATE TABLE users_plaintext;")
 
-    # Copy only the users that setup_test_db already inserted
-    cur.execute("""
-        INSERT INTO users_plaintext (username, password)
-        SELECT username, password FROM users
-        ON CONFLICT (username) DO NOTHING;
-    """)
+            # Copy only the users that setup_test_db already inserted
+            cur.execute("""
+                INSERT INTO users_plaintext (username, password)
+                SELECT username, password FROM users
+                ON CONFLICT (username) DO NOTHING;
+            """)
 
-    conn.commit()
-    cur.close()
-    conn.close()
+            conn.commit()
+
+    except psycopg2.Error as e:
+        pytest.fail(f"[pytest] Test DB setup failed: {e}")
 
     yield
 
@@ -501,14 +542,20 @@ def user_exists():
     This is to help with testing SQL injections
     """
     def _user_exists(username):
-        conn = psycopg2.connect(os.getenv("TEST_DATABASE_URL"))
-        cur = conn.cursor()
+        db_url = os.getenv("TEST_DATABASE_URL")
+        if not db_url:
+            pytest.fail("TEST_DATABASE_URL missing")
 
-        cur.execute("SELECT 1 FROM users WHERE username = %s;", (username,))
-        exists = cur.fetchone() is not None
+        try:
+            with pg_connect(db_url) as (conn, cur):
+                cur.execute(
+                    "SELECT 1 FROM users WHERE username = %s;",
+                    (username,),
+                )
+                exists = cur.fetchone() is not None
 
-        cur.close()
-        conn.close()
+        except psycopg2.Error as e:
+            pytest.fail(f"[pytest] Test DB setup failed: {e}")
 
         return exists
 
