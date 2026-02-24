@@ -1,5 +1,5 @@
 import tempfile
-import pytest   
+import pytest
 from mitigations.SSRF import fetch_and_store_image
 
 
