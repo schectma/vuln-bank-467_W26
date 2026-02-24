@@ -284,6 +284,7 @@ def setup_virtual_cards_db():
             cvv,
             expiry_date,
             card_limit,
+            current_balance,
             card_type,
             is_frozen
         )
@@ -294,6 +295,7 @@ def setup_virtual_cards_db():
             '123',
             '12/26',
             1000.00,
+            1000.00,
             'standard',
             FALSE
             ),
@@ -302,6 +304,7 @@ def setup_virtual_cards_db():
             '5555666677778888',
             '456',
             '12/26',
+            1000.00,
             1000.00,
             'standard',
             FALSE
