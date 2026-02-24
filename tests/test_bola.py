@@ -145,7 +145,7 @@ def test_create_bill_payment_bola_hardened(client, setup_test_db, setup_virtual_
     token = res.get_json()["token"]
     headers = {"Authorization": f"Bearer {token}"}
 
-    # Find card belonging to another user (testuser1)
+    # Find a card belonging to another user (testuser1)
     db_url = os.getenv("TEST_DATABASE_URL")
     import psycopg2
     conn = psycopg2.connect(db_url)
