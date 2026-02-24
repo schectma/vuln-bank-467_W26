@@ -371,8 +371,11 @@ def setup_bill_payments_db():
         );
     """)
 
-    # Seed one virtual card for testuser1 to use in a card payment
+    # Truncate dependent table first, then parent
+    cur.execute("TRUNCATE TABLE bill_payments RESTART IDENTITY CASCADE;")
     cur.execute("TRUNCATE TABLE virtual_cards RESTART IDENTITY CASCADE;")
+
+    # Seed one virtual card for testuser1 to use in a card payment
     cur.execute("""
         INSERT INTO virtual_cards
             (
@@ -398,7 +401,6 @@ def setup_bill_payments_db():
             );
     """)
 
-    cur.execute("TRUNCATE TABLE bill_payments RESTART IDENTITY CASCADE;")
     cur.execute("""
         INSERT INTO bill_payments
             (
