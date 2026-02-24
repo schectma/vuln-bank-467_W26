@@ -4,6 +4,7 @@ This app stores passwords in plaintext which is a vulnerability that can lead to
 
 ## Prerequisites
 - Access the web app through a browser
+- Vulnerability toggle should be off.
 
 ## Demonstrations
 There is a hashing toggle with multiple hashing modes available. The hashing modes are:
@@ -12,7 +13,9 @@ There is a hashing toggle with multiple hashing modes available. The hashing mod
 - Weak: SHA-1
 - Medium: SHA-256
 - Strong: Argon2id
-- Various: Combination of all of the above
+- Various: Combination of Weak, Medium, and Strong
+
+Users are able to login, register, create admin (if logged in as an admin), and reset passwords no matter what mode the hashing toggle is in.
 
 ### View mode
 1. The hashing mode is stated on the toggle button. It can also be viewed from the console window with this command:
@@ -66,3 +69,4 @@ The usernames and passwords from the Users table will be visible.
 The usernames and passwords from the Users table will be visible.
 
 ![alt text](./screenshots/hash_various.png)
+
