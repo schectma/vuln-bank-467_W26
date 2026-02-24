@@ -114,8 +114,9 @@ def hardened_user_client(client, setup_test_db):
 @contextmanager
 def pg_connect(dsn, autocommit=True):
     """
-    Connect to PostgreSQL with autocommit.
-    Ensures cleanup
+    Context manager
+    Connect to PostgreSQL and allow autocommit
+    Ensures that connection is always closed
     """
     conn = None
     try:
@@ -125,6 +126,8 @@ def pg_connect(dsn, autocommit=True):
         with conn.cursor() as cur:
             yield conn, cur
     except psycopg2.Error:
+        # If performing transaction, rollback changes
+        # so that there are not partial changes to database
         if conn and not autocommit:
             conn.rollback()
         raise
@@ -149,7 +152,7 @@ def ensure_test_db():
         return
 
     # To get database name from url
-    #test_db_name = test_db_url.split("/")[-1]
+    # Handles url if there are parameters
     test_db_name = urlparse(test_db_url).path.lstrip("/")
 
     # To setup the test database
@@ -187,7 +190,6 @@ def setup_test_db():
     app_module.rate_limit_storage.clear()
     # Runs before each test
     db_url = os.getenv("TEST_DATABASE_URL")
-    #assert db_url, "TEST_DATABASE_URL not set"
     if not db_url:
         pytest.fail("TEST_DATABASE_URL missing")
 
