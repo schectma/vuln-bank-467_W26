@@ -1,4 +1,4 @@
-# import os
+import os
 from helper import toggle_harden
 
 
@@ -134,54 +134,55 @@ def test_update_card_limit_bola_hardened(client, setup_test_db):
     )
 
 
-# def test_create_bill_payment_bola_hardened(client, setup_test_db, setup_virtual_cards_db):
-#     """Verify that attempt to pay a bill from another user's card fails."""
-#     toggle_harden(True)
+def test_create_bill_payment_bola_hardened(client, setup_test_db, setup_virtual_cards_db):
+    """Verify that attempt to pay a bill from another user's card fails."""
+    toggle_harden(True)
 
-#     # Attacker logs in as testuser2
-#     payload = {"username": "testuser2", "password": "testpassword2"}
-#     res = client.post("/login", json=payload)
-#     assert res.status_code == 200
-#     token = res.get_json()["token"]
-#     headers = {"Authorization": f"Bearer {token}"}
+    # Attacker logs in as testuser2
+    payload = {"username": "testuser2", "password": "testpassword2"}
+    res = client.post("/login", json=payload)
+    assert res.status_code == 200
+    token = res.get_json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
 
-#     # Find a card belonging to another user (testuser1)
-#     db_url = os.getenv("TEST_DATABASE_URL")
-#     import psycopg2
-#     conn = psycopg2.connect(db_url)
-#     cur = conn.cursor()
-#     cur.execute("""
-#         SELECT vc.id, u.username
-#         FROM virtual_cards vc
-#         JOIN users u ON vc.user_id = u.id
-#         WHERE u.username != %s
-#         LIMIT 1;
-#     """, ("testuser2",))
-#     row = cur.fetchone()
-#     cur.close()
-#     conn.close()
-#     assert row, "No card found for another user"
-#     victim_card_id, victim_username = row
+    # Find a card belonging to another user (testuser1)
+    db_url = os.getenv("TEST_DATABASE_URL")
+    import psycopg2
+    conn = psycopg2.connect(db_url)
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT vc.id, u.username
+        FROM virtual_cards vc
+        JOIN users u ON vc.user_id = u.id
+        WHERE u.username != %s
+        LIMIT 1;
+    """, ("testuser2",))
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    assert row, "No card found for another user"
+    victim_card_id, victim_username = row
 
-#     bill_payload = {
-#         "biller_id": 1,
-#         "amount": 100,
-#         "payment_method": "virtual_card",
-#         "card_id": victim_card_id,
-#         "description": "Monthly water bill"
-#     }
-#     res = client.post(
-#         "/api/bill-payments/create",
-#         json=bill_payload,
-#         headers=headers
-#     )
-#     data = res.get_json()
+    bill_payload = {
+        "biller_id": 1,
+        "amount": 100,
+        "payment_method": "virtual_card",
+        "card_id": victim_card_id,
+        "description": "Monthly water bill"
+    }
+    res = client.post(
+        "/api/bill-payments/create",
+        json=bill_payload,
+        headers=headers
+    )
+    data = res.get_json()
 
-#     # Should be forbidden or error
-#     assert res.status_code == 403
-#     assert data["status"] == "error"
-#     assert (
-#         "not authorized" in data["message"].lower()
-#         or "access denied" in data["message"].lower()
-#         or "not found" in data["message"].lower()
-#     )
+    # Should be forbidden or error
+    assert res.status_code == 403
+    assert data["status"] == "error"
+    assert (
+        "not authorized" in data["message"].lower()
+        or "access denied" in data["message"].lower()
+        or "not found" in data["message"].lower()
+        or "illegal payload" in data["message"].lower()
+    )
