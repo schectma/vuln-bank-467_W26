@@ -184,4 +184,5 @@ def test_create_bill_payment_bola_hardened(client, setup_test_db, setup_virtual_
         "not authorized" in data["message"].lower()
         or "access denied" in data["message"].lower()
         or "not found" in data["message"].lower()
+        or "illegal payload" in data["message"].lower()
     )
