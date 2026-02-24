@@ -111,6 +111,7 @@ def hardened_user_client(client, setup_test_db):
         hardened=True
     )
 
+
 @contextmanager
 def pg_connect(dsn, autocommit=True):
     """
@@ -158,7 +159,10 @@ def ensure_test_db():
     # To setup the test database
     try:
         with pg_connect(main_db_url) as (conn, cur):
-            cur.execute("SELECT 1 FROM pg_database WHERE datname=%s", (test_db_name,))
+            cur.execute(
+                "SELECT 1 FROM pg_database WHERE datname=%s",
+                (test_db_name,),
+            )
             if not cur.fetchone():
                 cur.execute(f"CREATE DATABASE {test_db_name};")
                 print(f"[pytest] Created test database: {test_db_name}")
