@@ -1557,7 +1557,7 @@ def reset_password():
                 # Save plaintext version
                 hashing.save_plaintext(username, new_password)
                 if app.config.get("HASHMODE", 0) in (1, 2, 3, 4):
-                    new_password = hashing.create_hashed_password('new_password')
+                    new_password = hashing.create_hashed_password(new_password)
                 # Vulnerability: No password complexity requirements
                 # Vulnerability: No password history check
                 execute_query(
@@ -1790,7 +1790,7 @@ def api_v1_reset_password():
             # Save plaintext version
             hashing.save_plaintext(username, new_password)
             if app.config.get("HASHMODE", 0) in (1, 2, 3, 4):
-                new_password = hashing.create_hashed_password('new_password')
+                new_password = hashing.create_hashed_password(new_password)
             # Vulnerability: No password complexity requirements
             # Vulnerability: No password history check
             execute_query(
@@ -1855,7 +1855,7 @@ def api_v2_reset_password():
             # Save plaintext version
             hashing.save_plaintext(username, new_password)
             if app.config.get("HASHMODE", 0) in (1, 2, 3, 4):
-                new_password = hashing.create_hashed_password('new_password')
+                new_password = hashing.create_hashed_password(new_password)
             # Vulnerability: No password complexity requirements
             # Vulnerability: No password history check
             execute_query(
@@ -1911,7 +1911,7 @@ def api_v3_reset_password():
             # Save plaintext version
             hashing.save_plaintext(username, new_password)
             if app.config.get("HASHMODE", 0) in (1, 2, 3, 4):
-                new_password = hashing.create_hashed_password('new_password')
+                new_password = hashing.create_hashed_password(new_password)
             execute_query(
                 "UPDATE users SET password = %s, reset_pin = NULL WHERE username = %s",
                 (new_password, username),
