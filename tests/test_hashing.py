@@ -351,7 +351,6 @@ def test_reset_password_is_hashed(hash_client, mode, prefix):
     flask_app.config["HASHMODE"] = mode
 
     username = "testuser1"
-    old_password = "testpassword1"
     new_password = "NewPass!123"
     pin = "9999"
 
@@ -477,7 +476,6 @@ def test_api_reset_password_is_hashed(hash_client, version, mode, prefix):
     """Password should be hashed after reset in each API version."""
     flask_app.config["HASHMODE"] = mode
 
-    username = f"resetuser_v{version}_{mode}"
     pin = "9999"
     new_password = "NewPass!123"
 
