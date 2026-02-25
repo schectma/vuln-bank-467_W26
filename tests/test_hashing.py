@@ -214,3 +214,117 @@ def test_register_then_login(hash_client, mode):
     assert login.status_code == 200
     assert data["status"] == "success"
     assert "token" in data
+
+
+def _hash_admin_client(client, mode):
+    """
+    Hash the DB with the given mode, then log in as admin.
+    Returns the authenticated client.
+    """
+    flask_app.config["HASHMODE"] = mode
+
+    with flask_app.app_context():
+        hashing.create_hashing_db()
+
+    res = client.post("/login", json={
+        "username": "admin",
+        "password": "admin123",
+    })
+
+    assert res.status_code == 200, (
+        f"Admin login failed (mode={mode}): {res.get_json()}"
+    )
+
+    token = res.get_json().get("token")
+    client.environ_base["HTTP_AUTHORIZATION"] = f"Bearer {token}"
+    return client
+
+
+def _create_admin(client, username, password):
+    """POST to /admin/create_admin with the given credentials."""
+    return client.post("/admin/create_admin", json={
+        "username": username,
+        "password": password,
+    })
+
+
+# To test hashing create_admin()
+# Tests if created admin's password is hashed in each mode
+@pytest.mark.parametrize("mode,prefix", [
+    (1, "sha1$"),
+    (2, "sha256$"),
+    (3, "argon2id$"),
+])
+def test_create_admin_password_is_hashed(hash_client, mode, prefix):
+    """
+    Created admin's password should be stored
+    with the correct hash prefix.
+    """
+    auth_client = _hash_admin_client(hash_client, mode)
+    uname = f"newadmin_{mode}"
+
+    res = _create_admin(auth_client, uname, "AdminPass!1")
+    assert res.status_code == 200
+    assert res.get_json()["status"] == "success"
+
+    stored = _get_stored_password(uname)
+    assert stored is not None
+    assert stored.startswith(prefix), (
+        f"Expected prefix '{prefix}', got: {stored[:30]}"
+    )
+
+
+def test_create_admin_mode4_password_is_hashed(hash_client):
+    """
+    Mode 4 should store one of the three hash
+    formats for the new admin.
+    """
+    auth_client = _hash_admin_client(hash_client, 4)
+
+    res = _create_admin(auth_client, "newadmin4", "AdminPass!1")
+    assert res.status_code == 200
+
+    stored = _get_stored_password("newadmin4")
+    assert stored is not None
+    valid_prefixes = ("sha1$", "sha256$", "argon2id$")
+    assert stored.startswith(valid_prefixes), (
+        f"Expected one of {valid_prefixes}, got: {stored[:30]}"
+    )
+
+
+# Tests if plaintext is saved when creating an admin
+@pytest.mark.parametrize("mode", [1, 2, 3, 4])
+def test_create_admin_saves_plaintext(hash_client, mode):
+    """
+    create_admin should also store the
+    original password in users_plaintext.
+    """
+    auth_client = _hash_admin_client(hash_client, mode)
+    uname = f"ptadmin{mode}"
+
+    res = _create_admin(auth_client, uname, "PlainSave!1")
+    assert res.status_code == 200
+
+    plaintext = _get_plaintext_password(uname)
+    assert plaintext == "PlainSave!1"
+
+
+@pytest.mark.parametrize("mode", [1, 2, 3, 4])
+def test_create_admin_then_login(hash_client, mode):
+    """Create a new admin with hashing, then log in with those credentials."""
+    auth_client = _hash_admin_client(hash_client, mode)
+    uname = f"loginadmin{mode}"
+    pwd = "L0gin@dmin!"
+
+    res = _create_admin(auth_client, uname, pwd)
+    assert res.status_code == 200
+
+    flask_app.config["HASHMODE"] = mode
+    login = hash_client.post("/login", json={
+        "username": uname,
+        "password": pwd,
+    })
+    data = login.get_json()
+    assert login.status_code == 200
+    assert data["status"] == "success"
+    assert "token" in data
