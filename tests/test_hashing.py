@@ -103,3 +103,114 @@ def test_login_nonexistent_user(hash_client, mode):
     """Login with a username that doesn't exist should return 401."""
     res = _hash_and_login(hash_client, mode, "ghost", "whatever")
     assert res.status_code == 401
+
+
+# Tests for registration
+def _hash_register(client, mode, username, password):
+    """
+    Helper: set HASHMODE, then POST /register.
+    Returns the response object.
+    """
+    flask_app.config["HASHMODE"] = mode
+
+    return client.post("/register", json={
+        "username": username,
+        "password": password,
+    })
+
+
+def _get_stored_password(username):
+    """Fetch the hashed password from the users table."""
+    with hashing.get_database() as (conn, cur):
+        cur.execute(
+            "SELECT password FROM users WHERE username = %s",
+            (username,),
+        )
+        row = cur.fetchone()
+    return row[0] if row else None
+
+
+def _get_plaintext_password(username):
+    """Fetch the plaintext password from the users_plaintext table."""
+    with hashing.get_database() as (conn, cur):
+        cur.execute(
+            "SELECT password FROM users_plaintext WHERE username = %s",
+            (username,),
+        )
+        row = cur.fetchone()
+    return row[0] if row else None
+
+
+# Tests if registration stores a hashed password in each mode
+@pytest.mark.parametrize("mode,prefix", [
+    (1, "sha1$"),
+    (2, "sha256$"),
+    (3, "argon2id$"),
+])
+def test_register_password_is_hashed(hash_client, mode, prefix):
+    """
+    Registered user's password in the DB should
+    start with the correct hash prefix.
+    """
+    uname = f"newuser_{mode}"
+    res = _hash_register(hash_client, mode, uname, "newpass123")
+    assert res.status_code == 200
+
+    stored = _get_stored_password(uname)
+    assert stored is not None
+    assert stored.startswith(prefix), (
+        f"Expected prefix '{prefix}', got: {stored[:30]}"
+    )
+
+
+def test_register_mode4_password_is_hashed(hash_client):
+    """Mode 4 should store one of the three hash formats."""
+    res = _hash_register(hash_client, 4, "newuser4", "newpass123")
+    assert res.status_code == 200
+
+    stored = _get_stored_password("newuser4")
+    assert stored is not None
+    valid_prefixes = ("sha1$", "sha256$", "argon2id$")
+    assert stored.startswith(valid_prefixes), (
+        f"Expected one of {valid_prefixes}, got: {stored[:30]}"
+    )
+
+
+# Tests if plaintext password is saved alongside the hash
+@pytest.mark.parametrize("mode", [1, 2, 3, 4])
+def test_register_saves_plaintext(hash_client, mode):
+    """
+    Registration should also store the
+    original password in users_plaintext.
+    """
+    uname = f"ptuser{mode}"
+    res = _hash_register(hash_client, mode, uname, "myplainpass")
+    assert res.status_code == 200
+
+    plaintext = _get_plaintext_password(uname)
+    assert plaintext == "myplainpass"
+
+
+@pytest.mark.parametrize("mode", [1, 2, 3, 4])
+def test_register_then_login(hash_client, mode):
+    """
+    Register a new user with hashing, then log in
+    with the correct credentials.
+    """
+    uname = f"reglogin{mode}"
+    pwd = "Str0ngP@ss!"
+
+    reg = _hash_register(hash_client, mode, uname, pwd)
+    assert reg.status_code == 200
+
+    # Login — no need to call create_hashing_db because
+    # register already hashed
+    flask_app.config["HASHMODE"] = mode
+    login = hash_client.post("/login", json={
+        "username": uname,
+        "password": pwd,
+    })
+    data = login.get_json()
+    assert login.status_code == 200
+    assert data["status"] == "success"
+    assert "token" in data
