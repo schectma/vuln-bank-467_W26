@@ -6,6 +6,7 @@ import hashlib
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError, InvalidHashError
 from flask import current_app
+from contextlib import contextmanager
 
 
 def initialize():
@@ -18,19 +19,33 @@ def initialize():
     add_existing_users()
 
 
-def get_database():
+@contextmanager
+def get_database(autocommit=False):
     """
     Helper function for database connection/cursor
+    Always closes connection
+    Rolls back if there is an error
     """
+    conn = None
 
-    conn = psycopg2.connect(
-        dbname=os.getenv("DB_NAME"),
-        user=os.getenv("DB_USER"),
-        password=os.getenv("DB_PASSWORD"),
-        host=os.getenv("DB_HOST"),
-        port=os.getenv("DB_PORT")
-    )
-    return conn, conn.cursor()
+    try:
+        conn = psycopg2.connect(
+            dbname=os.getenv("DB_NAME"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            host=os.getenv("DB_HOST"),
+            port=os.getenv("DB_PORT")
+        )
+        conn.autocommit = autocommit
+        with conn.cursor() as cur:
+            yield conn, cur
+    except psycopg2.Error:
+        if conn and not autocommit:
+            conn.rollback()
+        raise
+    finally:
+        if conn:
+            conn.close()
 
 
 def add_demo_users():
@@ -38,7 +53,6 @@ def add_demo_users():
     Add hashed demo users to User table
     Most of the passwords are simple common passwords
     """
-    conn, cur = get_database()
 
     newUsers = [
         ('hashadmin', 'Admin@123', 'HADMIN001', 1000000.0, True),
@@ -53,29 +67,28 @@ def add_demo_users():
         ('hashuser9', 'Aa@123456', 'HUSER009', 1000.0, False)
     ]
 
-    for username, password, account_number, balance, is_admin in newUsers:
-        cur.execute("""
-            INSERT INTO users (
-            username,
-            password,
-            account_number,
-            balance,
-            is_admin
-            )
-            VALUES
-            (%s, %s, %s, %s, %s)
-            ON CONFLICT (username) DO NOTHING
-        """, (
-            username,
-            password,
-            account_number,
-            balance,
-            is_admin
-        ))
+    with get_database() as (conn, cur):
+        for username, password, account_number, balance, is_admin in newUsers:
+            cur.execute("""
+                INSERT INTO users (
+                username,
+                password,
+                account_number,
+                balance,
+                is_admin
+                )
+                VALUES
+                (%s, %s, %s, %s, %s)
+                ON CONFLICT (username) DO NOTHING
+            """, (
+                username,
+                password,
+                account_number,
+                balance,
+                is_admin
+            ))
 
-    conn.commit()
-    cur.close()
-    conn.close()
+        conn.commit()
 
 
 def create_plaintext_table():
@@ -85,36 +98,30 @@ def create_plaintext_table():
     Therefore I cannot got from weak to medium etc. as
     The password is already hashed
     """
-    conn, cur = get_database()
+    with get_database() as (conn, cur):
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS users_plaintext (
+                username TEXT PRIMARY KEY,
+                password TEXT NOT NULL
+            )
+        """)
 
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS users_plaintext (
-            username TEXT PRIMARY KEY,
-            password TEXT NOT NULL
-        )
-    """)
-
-    conn.commit()
-    cur.close()
-    conn.close()
+        conn.commit()
 
 
 def add_existing_users():
     """
     Add existing users to the plaintext table
     """
-    conn, cur = get_database()
+    with get_database() as (conn, cur):
+        cur.execute("""
+            INSERT INTO users_plaintext (username, password)
+            SELECT username, password
+            FROM users
+            ON CONFLICT (username) DO NOTHING
+        """)
 
-    cur.execute("""
-        INSERT INTO users_plaintext (username, password)
-        SELECT username, password
-        FROM users
-        ON CONFLICT (username) DO NOTHING
-    """)
-
-    conn.commit()
-    cur.close()
-    conn.close()
+        conn.commit()
 
 
 def create_hashing_db():
@@ -122,29 +129,26 @@ def create_hashing_db():
     Creates a database of hashed passwords
     """
 
-    conn, cur = get_database()
+    with get_database() as (conn, cur):
+        cur.execute("SELECT username, password FROM users_plaintext")
+        rows = cur.fetchall()
 
-    cur.execute("SELECT username, password FROM users_plaintext")
-    rows = cur.fetchall()
+        for username, password in rows:
+            hpass = create_hashed_password(password)
 
-    for username, password in rows:
-        hpass = create_hashed_password(password)
-
-        cur.execute("""
-            UPDATE users
-            SET password = %s
-            WHERE username = %s
-        """, (hpass, username))
-
-        if cur.rowcount == 0:
             cur.execute("""
-                INSERT INTO users (username, password)
-                VALUES (%s, %s)
-            """, (username, hpass))
+                UPDATE users
+                SET password = %s
+                WHERE username = %s
+            """, (hpass, username))
 
-    conn.commit()
-    cur.close()
-    conn.close()
+            if cur.rowcount == 0:
+                cur.execute("""
+                    INSERT INTO users (username, password)
+                    VALUES (%s, %s)
+                """, (username, hpass))
+
+        conn.commit()
 
 
 def create_hashed_password(password):
@@ -198,11 +202,9 @@ def hashed_login(username, password):
     Checks if the username and password match
     information in the Users table
     """
-    conn, cur = get_database()
-    cur.execute("SELECT * FROM users WHERE username = %s", (username,))
-    user = cur.fetchone()
-    cur.close()
-    conn.close()
+    with get_database() as (conn, cur):
+        cur.execute("SELECT * FROM users WHERE username = %s", (username,))
+        user = cur.fetchone()
 
     # user[2] is the password column in the database
     if not user or not check_password(user[2], password):
@@ -240,17 +242,10 @@ def save_plaintext(username, password):
     """
     When user registers, need to save plaintext password
     """
-    conn, cur = get_database()
-    try:
+    with get_database() as (conn, cur):
         cur.execute("""
             INSERT INTO users_plaintext (username, password)
             VALUES (%s, %s)
             ON CONFLICT (username) DO UPDATE SET password = %s
         """, (username, password, password))
         conn.commit()
-    except Exception as e:
-        conn.rollback()
-        raise e
-    finally:
-        cur.close()
-        conn.close()
