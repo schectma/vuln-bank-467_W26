@@ -676,7 +676,9 @@ def dashboard(current_user):
                          loans=loans,
                          is_admin=current_user.get('is_admin', False),
                          xss_protection_enabled=harden or XSS_PROTECTION_ENABLED,
-                         security_hardening_enabled=harden or SECURITY_HARDENING_ENABLED)
+                         security_hardening_enabled=harden or SECURITY_HARDENING_ENABLED,
+                         hardened=harden,
+                         hashmode=app.config.get("HASHMODE", 0))
 
 # Check balance endpoint
 @app.route('/check_balance/<account_number>')
