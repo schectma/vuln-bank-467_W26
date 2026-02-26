@@ -257,7 +257,7 @@ for u,algo,pw in cracked:
 "
 ```
 
-6. Confirm your terminal has the running container by running 'docker ps' and idenifying it
+6. Confirm your terminal has the running container by running 'docker ps' and identifying it
 7. Paste your updated script into the terminal and run it
 
 ![Various](./screenshots/hash_steal_various.png)
