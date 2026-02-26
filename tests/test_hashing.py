@@ -328,3 +328,213 @@ def test_create_admin_then_login(hash_client, mode):
     assert login.status_code == 200
     assert data["status"] == "success"
     assert "token" in data
+
+
+# Testing reset password
+def _set_reset_pin(username, pin):
+    """Directly set reset_pin for a user in the DB."""
+    with hashing.get_database() as (conn, cur):
+        cur.execute(
+            "UPDATE users SET reset_pin = %s WHERE username = %s",
+            (pin, username),
+        )
+        conn.commit()
+
+
+@pytest.mark.parametrize("mode,prefix", [
+    (1, "sha1$"),
+    (2, "sha256$"),
+    (3, "argon2id$"),
+])
+def test_reset_password_is_hashed(hash_client, mode, prefix):
+    """Tests that password is hashed when reset"""
+    flask_app.config["HASHMODE"] = mode
+
+    username = "testuser1"
+    new_password = "NewPass!123"
+    pin = "9999"
+
+    _set_reset_pin(username, pin)
+
+    res = hash_client.post("/reset-password", json={
+        "username": username,
+        "reset_pin": pin,
+        "new_password": new_password,
+    })
+
+    assert res.status_code == 200
+
+    stored = _get_stored_password(username)
+    assert stored is not None
+    assert stored.startswith(prefix)
+
+
+def test_reset_password_mode4_hash(hash_client):
+    """Checks if password rehashed in various mode"""
+    flask_app.config["HASHMODE"] = 4
+
+    username = "testuser2"
+    new_password = "Mode4Pass!"
+    pin = "1234"
+
+    _set_reset_pin(username, pin)
+
+    res = hash_client.post("/reset-password", json={
+        "username": username,
+        "reset_pin": pin,
+        "new_password": new_password,
+    })
+
+    assert res.status_code == 200
+
+    stored = _get_stored_password(username)
+    valid_prefixes = ("sha1$", "sha256$", "argon2id$")
+    assert stored.startswith(valid_prefixes)
+
+
+@pytest.mark.parametrize("mode", [1, 2, 3, 4])
+def test_reset_password_updates_plaintext(hash_client, mode):
+    """New login should be in plaintext table"""
+    flask_app.config["HASHMODE"] = mode
+
+    username = "testuser3"
+    new_password = "PlainReset!"
+    pin = "5555"
+
+    _set_reset_pin(username, pin)
+
+    res = hash_client.post("/reset-password", json={
+        "username": username,
+        "reset_pin": pin,
+        "new_password": new_password,
+    })
+
+    assert res.status_code == 200
+
+    plaintext = _get_plaintext_password(username)
+    assert plaintext == new_password
+
+
+@pytest.mark.parametrize("mode", [1, 2, 3, 4])
+def test_reset_password_then_login(hash_client, mode):
+    """
+    Tests that user cannot login
+    with old password but can with new password
+    """
+    flask_app.config["HASHMODE"] = mode
+
+    username = "testuser1"
+    old_password = "testpassword1"
+    new_password = "LoginAfterReset!"
+    pin = "7777"
+
+    _set_reset_pin(username, pin)
+
+    res = hash_client.post("/reset-password", json={
+        "username": username,
+        "reset_pin": pin,
+        "new_password": new_password,
+    })
+
+    assert res.status_code == 200
+
+    # Old password should fail
+    old_login = hash_client.post("/login", json={
+        "username": username,
+        "password": old_password,
+    })
+    assert old_login.status_code == 401
+
+    # New password should succeed
+    new_login = hash_client.post("/login", json={
+        "username": username,
+        "password": new_password,
+    })
+    assert new_login.status_code == 200
+
+
+# To test the other reset endpoints
+def _api_reset(client, version, username, pin, new_password):
+    """
+    Helper to call the versioned reset endpoints.
+    version = 1 | 2 | 3
+    """
+    return client.post(f"/api/v{version}/reset-password", json={
+        "username": username,
+        "reset_pin": pin,
+        "new_password": new_password,
+    })
+
+
+@pytest.mark.parametrize("version", [1, 2, 3])
+@pytest.mark.parametrize("mode,prefix", [
+    (1, "sha1$"),
+    (2, "sha256$"),
+    (3, "argon2id$"),
+])
+def test_api_reset_password_is_hashed(hash_client, version, mode, prefix):
+    """Password should be hashed after reset in each API version."""
+    flask_app.config["HASHMODE"] = mode
+
+    pin = "9999"
+    new_password = "NewPass!123"
+
+    # create user-specific reset pin
+    _set_reset_pin("testuser1", pin)
+
+    res = _api_reset(hash_client, version, "testuser1", pin, new_password)
+    assert res.status_code == 200
+
+    stored = _get_stored_password("testuser1")
+    assert stored is not None
+    assert stored.startswith(prefix)
+
+
+@pytest.mark.parametrize("version", [1, 2, 3])
+@pytest.mark.parametrize("mode", [1, 2, 3, 4])
+def test_api_reset_password_saves_plaintext(hash_client, version, mode):
+    """Plaintext password must be stored alongside hash."""
+    flask_app.config["HASHMODE"] = mode
+
+    username = "testuser3"
+    pin = "5555"
+    new_password = "PlainReset!"
+
+    _set_reset_pin(username, pin)
+
+    res = _api_reset(hash_client, version, username, pin, new_password)
+    assert res.status_code == 200
+
+    plaintext = _get_plaintext_password(username)
+    assert plaintext == new_password
+
+
+@pytest.mark.parametrize("version", [1, 2, 3])
+@pytest.mark.parametrize("mode", [1, 2, 3, 4])
+def test_api_reset_password_then_login(hash_client, version, mode):
+    """Old password should fail; new password should work."""
+    flask_app.config["HASHMODE"] = mode
+
+    username = "testuser1"
+    old_password = "testpassword1"
+    new_password = "LoginAfterReset!"
+    pin = "7777"
+
+    _set_reset_pin(username, pin)
+
+    res = _api_reset(hash_client, version, username, pin, new_password)
+    assert res.status_code == 200
+
+    # old password fails
+    old_login = hash_client.post("/login", json={
+        "username": username,
+        "password": old_password,
+    })
+    assert old_login.status_code == 401
+
+    # new password works
+    new_login = hash_client.post("/login", json={
+        "username": username,
+        "password": new_password,
+    })
+    assert new_login.status_code == 200
