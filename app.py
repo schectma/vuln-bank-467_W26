@@ -1389,6 +1389,13 @@ def harden_toggle():
         'hardened': harden
     })
 
+@app.route('/api/toggle/reset', methods=['POST'])
+def reset_toggle():
+
+    return jsonify({
+        'status': 'success'
+    })
+
 @app.route('/api/toggle/hashing', methods=['POST'])
 def hashing_toggle():
     """
