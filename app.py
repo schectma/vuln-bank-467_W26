@@ -26,6 +26,7 @@ from mitigations import session_exp
 from mitigations import SSRF
 from mitigations import rate_limiting
 from mitigations import hashing
+from pathlib import Path
 
 
 # Load environment variables
@@ -33,6 +34,28 @@ load_dotenv()
 
 # Initialize Flask app
 app = Flask(__name__)
+
+def seed_database_on_startup():
+    """
+    Seed database once on app startup if seed users don't exist.
+    """
+    try:
+        from database import get_connection
+        conn = get_connection()
+        with conn.cursor() as cur:
+            # Check if seed users already exist
+            cur.execute("SELECT COUNT(*) FROM users WHERE username IN ('testuser1', 'testuser2', 'testuser3');")
+            if cur.fetchone()[0] > 0:
+                return
+            
+            # Load and execute seed SQL
+            seed_file = Path(__file__).parent / "seed_data.sql"
+            if seed_file.exists():
+                with open(seed_file, "r", encoding="utf-8") as f:
+                    cur.execute(f.read())
+                conn.commit()
+    except Exception as e:
+        print(f"[startup] Seed failed: {e}")
 
 # Initialize database connection pool
 #init_connection_pool()
@@ -2807,6 +2830,8 @@ if __name__ == '__main__':
     if os.getenv("APP_ENV") != "test":
         init_db()
     init_auth_routes(app)
+
+    seed_database_on_startup()
 
     # Debug mode toggle
     if harden:
