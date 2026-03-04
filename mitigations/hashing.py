@@ -130,6 +130,12 @@ def create_hashing_db():
     """
 
     with get_database() as (conn, cur):
+        # Clean up plaintext entries for users that no longer exist
+        cur.execute("""
+            DELETE FROM users_plaintext
+            WHERE username NOT IN (SELECT username FROM users)
+        """)
+
         cur.execute("SELECT username, password FROM users_plaintext")
         rows = cur.fetchall()
 
@@ -141,12 +147,6 @@ def create_hashing_db():
                 SET password = %s
                 WHERE username = %s
             """, (hpass, username))
-
-            if cur.rowcount == 0:
-                cur.execute("""
-                    INSERT INTO users (username, password)
-                    VALUES (%s, %s)
-                """, (username, hpass))
 
         conn.commit()
 
