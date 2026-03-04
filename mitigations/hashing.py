@@ -55,22 +55,23 @@ def add_demo_users():
     """
 
     newUsers = [
-        ('hashadmin', 'Admin@123', 'HADMIN001', 1000000.0, True),
-        ('hashuser1', '123456', 'HUSER001', 1000.0, False),
-        ('hashuser2', 'Password', 'HUSER002', 1000.0, False),
-        ('hashuser3', 'hashtesting123', 'HUSER003', 1000.0, False),
-        ('hashuser4', '1234567890', 'HUSER004', 1000.0, False),
-        ('hashuser5', '@kfi&mdloromb!!', 'HUSER005', 1000.0, False),
-        ('hashuser6', 'P@SSw0rd', 'HUSER006', 1000.0, False),
-        ('hashuser7', '@kfi&mdloromb!!', 'HUSER007', 1000.0, False),
-        ('hashuser8', 'sl&nsd!gmndfg8', 'HUSER008', 1000.0, False),
-        ('hashuser9', 'Aa@123456', 'HUSER009', 1000.0, False)
+        ('10', 'hashadmin', 'Admin@123', 'HADMIN001', 1000000.0, True),
+        ('11', 'hashuser1', '123456', 'HUSER001', 1000.0, False),
+        ('12', 'hashuser2', 'Password', 'HUSER002', 1000.0, False),
+        ('13', 'hashuser3', 'hashtesting123', 'HUSER003', 1000.0, False),
+        ('14', 'hashuser4', '1234567890', 'HUSER004', 1000.0, False),
+        ('15', 'hashuser5', '@kfi&mdloromb!!', 'HUSER005', 1000.0, False),
+        ('16', 'hashuser6', 'P@SSw0rd', 'HUSER006', 1000.0, False),
+        ('17', 'hashuser7', '@kfi&mdloromb!!', 'HUSER007', 1000.0, False),
+        ('18', 'hashuser8', 'sl&nsd!gmndfg8', 'HUSER008', 1000.0, False),
+        ('19', 'hashuser9', 'Aa@123456', 'HUSER009', 1000.0, False)
     ]
 
     with get_database() as (conn, cur):
-        for username, password, account_number, balance, is_admin in newUsers:
+        for id, username, password, account_number, balance, is_admin in newUsers:
             cur.execute("""
                 INSERT INTO users (
+                id,
                 username,
                 password,
                 account_number,
@@ -78,9 +79,10 @@ def add_demo_users():
                 is_admin
                 )
                 VALUES
-                (%s, %s, %s, %s, %s)
+                (%s, %s, %s, %s, %s, %s)
                 ON CONFLICT (username) DO NOTHING
             """, (
+                id,
                 username,
                 password,
                 account_number,

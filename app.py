@@ -1392,9 +1392,48 @@ def harden_toggle():
 @app.route('/api/toggle/reset', methods=['POST'])
 def reset_toggle():
 
-    return jsonify({
+    try:
+        from database import get_connection
+        conn = get_connection()
+        cur = conn.cursor()
+
+        # Clear existing data
+        cur.execute("DELETE FROM bill_payments")
+        cur.execute("DELETE FROM virtual_cards")
+        cur.execute("DELETE FROM transactions")
+        cur.execute("DELETE FROM users_plaintext")
+        cur.execute("DELETE FROM users")
+
+        # Load and execute seed SQL
+        seed_file = Path(__file__).parent / "seed_data.sql"
+        if seed_file.exists():
+            with open(seed_file, "r", encoding="utf-8") as f:
+                cur.execute(f.read())
+
+        # commit here because hashing.initialize will open a separate connection
+        conn.commit()
+
+        app.config["HASHMODE"] = 0
+        hashing.initialize()
+
+        # to avoid any newly registered users or virtual cards using the same id
+        cur.execute("SELECT setval('users_id_seq', (SELECT MAX(id) FROM users))")
+        cur.execute("SELECT setval('virtual_cards_id_seq', (SELECT MAX(id) FROM virtual_cards))")
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        return jsonify({
         'status': 'success'
-    })
+        })
+
+    except Exception as e:
+        print(f"[reset] failed: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
 
 @app.route('/api/toggle/hashing', methods=['POST'])
 def hashing_toggle():
