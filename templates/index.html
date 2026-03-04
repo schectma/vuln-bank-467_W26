@@ -1231,7 +1231,9 @@
     <script>
         async function toggleReset(e) {
             e.preventDefault();
-
+            if (!confirm('Are you sure you want to reset the database? All changes will be deleted.')) {
+                return;
+            }
             try {
                 const res = await fetch('/api/toggle/reset', {
                     method: 'POST'
