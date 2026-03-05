@@ -45,7 +45,7 @@ body: JSON.stringify({username: "admin' OR '1'='1"
     ![alt text](./screenshots/sql_login_vuln_cli.png)
 
 #### Mitigate
-Return to root URL (Vulnerable Bank homepage) and click Toggle Mitigation button. Repeat attack (either sequence of steps above) and observe outcome:
+Toggle the vulnerability state to on. Repeat attack (either sequence of steps above) and observe outcome:
 
 10. UI:
 
@@ -59,7 +59,7 @@ Return to root URL (Vulnerable Bank homepage) and click Toggle Mitigation button
 Allows attacker to alter information in the database when creating an admin account. If an attacker had
 obtained an admin token this would allow them to do this without being an admin.
 #### Exploit
-1. For the sake of the examples below, register the following users: "bb" and "cc". It does not matter what the passwords are.
+1. This demonstration requires the users 'testuser1' and 'testuser2'. If those users do not exist, either reset the database or register them as users.
 2. Log in as an admin.
 From here, this may be exploited in one of two ways:
 ##### via UI
@@ -75,24 +75,25 @@ From here, this may be exploited in one of two ways:
 
     ![alt text](./screenshots/sql_admin_create_account.png)
 
-6. Type the following into username: `newuser1', 'foo', '1540', true); DELETE FROM users WHERE username = 'bb';--`.
+6. Type the following into username: `newuser1', 'foo', '1540', true); DELETE FROM users WHERE username = 'testuser1';--`.
 You may need to change the account_number from 1540 if already taken.
 7. Type in anything you want in the password field.
 
     ![alt text](./screenshots/sql_admin_inj_UI.png)
 
-8. Take a look at the "User Management" section to see that `bb` has been replaced by `newuser1'.
+8. Take a look at the "User Management" section to see that `testuser1` has been replaced by `newuser1'.
 
     ![alt text](./screenshots/sql_admin_after_inj.png)
 
 ##### via CLI
 9. Open the browser console/terminal.
 10. Issue the following fetch request as a command
-to test the SQL injection: `fetch("/admin/create_admin", {
+to test the SQL injection (may need to change the account_number if already taken):
+`fetch("/admin/create_admin", {
   method: "POST", headers: { "Content-Type": "application/json",
     "Authorization": "Bearer " + localStorage.getItem("jwt_token")
   }, body: JSON.stringify({
-    username: "newuser2', 'bar', '1541', true); DELETE FROM users WHERE username = 'cc';--",
+    username: "newuser2', 'bar', '1541', true); DELETE FROM users WHERE username = 'testuser2';--",
     password: "123"})
     }).then(r => r.json())
     .then(console.log);`
@@ -104,10 +105,10 @@ to test the SQL injection: `fetch("/admin/create_admin", {
     ![alt text](./screenshots/sql_admin_vuln_manage.png)
 
 #### Mitigate
-Return to root URL (Vulnerable Bank homepage) and click Toggle Mitigation button.
+Toggle the vulnerability state to on.
 
 12. via UI:
-13. Follow the directions for #3-#5 above. For #6, use this command instead: `newuser3', 'foo', '1543', true); DELETE FROM users WHERE username = 'newuser1';--`. You may need to change the account_number from 1540 if already taken. Type in anything you want in the password field. This command assumes that `newuser1` was created when testing above. If not, register `newuser1` as a user before testing this step.
+13. Follow the directions for #3-#5 above. For #6, use this command instead: `newuser3', 'foo', '1543', true); DELETE FROM users WHERE username = 'newuser1';--`. You may need to change the account_number from 1543 if already taken. Type in anything you want in the password field. This command assumes that `newuser1` was created when testing above. If not, register `newuser1` as a user before testing this step.
 
     ![alt text](./screenshots/sql_admin_hardened_1.png)
 
@@ -119,7 +120,8 @@ Return to root URL (Vulnerable Bank homepage) and click Toggle Mitigation button
 16. Open the browser console/terminal.
 17.  This command assumes that `newuser1` was created when testing above. If not, register `newuser1` as a user before testing this step.
 Issue the following fetch request as a command
-to test the SQL injection: `fetch("/admin/create_admin", {
+to test the SQL injection (may need to change the account_number if already taken):
+`fetch("/admin/create_admin", {
   method: "POST", headers: { "Content-Type": "application/json",
     "Authorization": "Bearer " + localStorage.getItem("jwt_token")
   }, body: JSON.stringify({
@@ -167,7 +169,7 @@ username: "admin' OR '1'='1"
     ![alt text](./screenshots/forgot_5.png)
 
 #### Mitigate
-Return to root URL (Vulnerable Bank homepage) and click Toggle Mitigation button. Repeat attack (either sequence of steps above) and observe outcome:
+Toggle the vulnerability state to on. Repeat attack (either sequence of steps above) and observe outcome:
 
 7. UI:
 
@@ -197,7 +199,7 @@ username: "admin' OR '1'='1"
     ![alt text](./screenshots/forgot_v1_vuln.png)
 
 #### Mitigate
-Return to root URL (Vulnerable Bank homepage) and click Toggle Mitigation button. Repeat attack as above and observe outcome:
+Toggle the vulnerability state to on. Repeat attack as above and observe outcome:
 
 4. CLI:
 
@@ -223,7 +225,7 @@ username: "admin' OR '1'='1"
     ![alt text](./screenshots/forgot_v2_vuln.png)
 
 #### Mitigate
-Return to root URL (Vulnerable Bank homepage) and click Toggle Mitigation button. Repeat attack as above and observe outcome:
+Toggle the vulnerability state to on. Repeat attack as above and observe outcome:
 
 4. CLI:
 
@@ -248,7 +250,7 @@ username: "admin' OR '1'='1"
 
     ![alt text](./screenshots/forgot_v3_vuln.png)
 #### Mitigate
-Return to root URL (Vulnerable Bank homepage) and click Toggle Mitigation button. Repeat attack as above and observe outcome:
+Toggle the vulnerability state to on. Repeat attack as above and observe outcome:
 
 4. CLI:
 
@@ -279,7 +281,7 @@ method: 'GET',headers: {
     ![alt text](./screenshots/transaction_3.png)
 
 #### Mitigate
-Return to root URL (Vulnerable Bank homepage) and click Toggle Mitigation button. Repeat attack (either sequence of steps above) and observe outcome:
+Toggle the vulnerability state to on. Repeat attack (either sequence of steps above) and observe outcome:
 
 6. URL:
 
@@ -311,7 +313,7 @@ card_limit: 1000})}).then(r => r.json())
     ![alt text](./screenshots/virtual_1.png)
 
 #### Mitigate
-Return to root URL (Vulnerable Bank homepage) and click Toggle Mitigation button. Repeat attack (either sequence of steps above) and observe outcome:
+Toggle the vulnerability state to on. Repeat attack (either sequence of steps above) and observe outcome:
 
 ![alt text](./screenshots/virtual_2.png)
 
