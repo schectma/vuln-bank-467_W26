@@ -187,7 +187,7 @@ vuln-bank-467_W26/
 
 ## Testing
 
-Run the test suite with Docker:
+Build the test container/environment with Docker:
 ```bash
 docker-compose -f docker-compose-test.yml up --build
 ```
