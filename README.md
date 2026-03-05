@@ -98,7 +98,7 @@ A hosted instance of the application is available for testing on Google Cloud Pl
    cp .env.example .env
    ```
 
-3. (Optional) Add your [OpenRouter](https://openrouter.ai/) API key to `.env` if you want AI chat functionality:
+3. (Optional) Add your [OpenRouter](https://openrouter.ai/) API key to `.env` if desired:
    ```
    OPENROUTER_API_KEY=your_api_key_here
    ```
