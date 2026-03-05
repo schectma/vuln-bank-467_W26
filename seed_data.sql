@@ -16,10 +16,10 @@ VALUES
   ('TEST001', 'TEST003', 25.00, 'transfer', 'Test transfer 3')
 ON CONFLICT DO NOTHING;
 
-INSERT INTO virtual_cards (user_id, card_number, cvv, expiry_date, card_limit, current_balance, card_type, is_frozen)
+INSERT INTO virtual_cards (id, user_id, card_number, cvv, expiry_date, card_limit, current_balance, card_type, is_frozen)
 VALUES
-  (100, '1111222233334444', '123', '12/26', 1000.00, 1000.00, 'standard', FALSE),
-  (101, '5555666677778888', '456', '12/26', 1000.00, 1000.00, 'standard', FALSE)
+  (1, 100, '1111222233334444', '123', '12/26', 1000.00, 1000.00, 'standard', FALSE),
+  (2, 101, '5555666677778888', '456', '12/26', 1000.00, 1000.00, 'standard', FALSE)
 ON CONFLICT (card_number) DO NOTHING;
 
 INSERT INTO bill_payments (user_id, biller_id, amount, payment_method, card_id, reference_number, status, description)
