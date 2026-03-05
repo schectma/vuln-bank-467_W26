@@ -149,7 +149,7 @@ This toggle system allows reviewers to easily test each vulnerability in both st
 
 ### Resetting the Database
 
-A **Reset Database** button on the landing page wipes all user created data and re-seeds the database with the default accounts and test data from `seed_data.sql`. This is useful after testing exploits that modify or corrupt data.
+A **Reset Database** button on the landing page and in the admin control panel wipes all user created data and re-seeds the database with the default accounts and test data from `seed_data.sql`. This is useful after testing exploits that modify or corrupt data.
 
 ### Exploring Vulnerabilities
 
