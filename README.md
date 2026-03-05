@@ -215,7 +215,7 @@ The documentation is designed so that anyone can reproduce the results.
 CS 467 — Online Capstone, Oregon State University, Winter 2026. This project is student managed and directed.
 
 - [Jessica Johnson](https://github.com/JessJohn0)
-- [Alexander Schetman](https://github.com/schectma)
+- [Alexander Schectman](https://github.com/schectma)
 - [Alejandro Rodriguez](https://github.com/alejandrorodvar)
 - [Chrystyan Pulido](https://github.com/chrys-pl)
 
