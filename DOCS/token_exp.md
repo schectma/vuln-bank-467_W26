@@ -1,6 +1,7 @@
 # No Session/Token Expiration
 No session/token expiration means that the JWT token remains valid indefinitely. This is a large security risk if an attacker
-acquires a token as it will never expire and can continue to be used.
+acquires a token as it will never expire and can continue to be used. How long a token lasts varies on the application, but is frequently
+less than 30 minutes for banks. In order to make it easier to demonstrate for this project, it has been set for 30 seconds for the mitigation.
 ## Prerequisites
 Browser access to functioning web app and least one registered user account.
 ## Demonstrations
@@ -10,24 +11,22 @@ This vulnerability is present within auth.py. Steps for exploitation and verific
 From here, this may be exploited with the CLI.
 ##### via CLI
 2. Open the browser console/terminal.
-3. Paste in the following command: `localStorage.getItem('jwt_token');`
-This will list the token
-4. Issue the following fetch request as a command replacing `YOUR_TOKEN_HERE` with the token listed above:
+3. Issue the following fetch request as a command:
 : `fetch("/api/bill-payments/history", {
-headers: {"Authorization": "Bearer YOUR_TOKEN_HERE"
+headers: {"Authorization": "Bearer " + localStorage.getItem('jwt_token')
 }}).then(r => r.json()).then(console.log)`
 
-5. Wait 15 seconds and paste in the same command with the same token number.
-6. See result:
+4. Wait at least 30 seconds and paste in the same command.
+5. See result:
 
     ![alt text](./screenshots/token_1.png)
 
 #### Mitigate
-Return to root URL (Vulnerable Bank homepage) and click Toggle Mitigation button.
+Toggle vulnerabilities on.
 
-7. Repeat the directions above.
+6. Repeat the directions above. Token is now set to expire after 30 seconds.
 
-8. See result:
+7. See result:
 
 ![alt text](./screenshots/token_2.png)
 
