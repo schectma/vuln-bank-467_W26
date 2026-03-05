@@ -12,7 +12,7 @@ From here, this may be exploited with the CLI.
 ##### via CLI
 2. Open the browser console/terminal.
 3. Issue the following fetch request as a command:
-: `fetch("/api/bill-payments/history", {
+`fetch("/api/bill-payments/history", {
 headers: {"Authorization": "Bearer " + localStorage.getItem('jwt_token')
 }}).then(r => r.json()).then(console.log)`
 
