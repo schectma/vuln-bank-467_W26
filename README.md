@@ -6,7 +6,7 @@ A web security research project conducted as part of CS 467 (Online Capstone) at
 
 **This application is for web security research purposes only.** 
 
-The Vulnerable Bank web application was not developed by this team. It is an existing open source, intentionally vulnerable banking app. Our work focuses on **demonstrating exploits** against its built-in vulnerabilities, **developing mitigations**, and **documenting** both the attacks and defenses so that anyone can reproduce the results.
+The Vulnerable Bank web application was not developed by this team. It is [an existing open source, intentionally vulnerable banking app](https://github.com/Commando-X/vuln-bank) developed by GitHub user [Commando-X.](https://github.com/Commando-X) Our work focuses on **demonstrating exploits** against its built-in vulnerabilities, **developing mitigations**, and **documenting** both the attacks and defenses so that anyone can reproduce the results.
 
 ## Project Overview
 
