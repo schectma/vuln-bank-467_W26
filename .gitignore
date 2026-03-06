@@ -1,1 +1,6 @@
 .env
+venv/
+static/uploads/*.mp4
+__pycache__
+./mitigations/__pycache__
+./static/uploads
