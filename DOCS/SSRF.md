@@ -13,7 +13,7 @@ This endpoint allows an external URL to navigate to and influence any other endp
 2. Open the browser console
 3. Paste the following code, press enter, then observe outcome:
 
-    `const origin = window.location.origin;
+    ```const origin = window.location.origin;
     const token = localStorage.getItem('jwt_token');
 
     fetch(`${origin}/upload_profile_picture_url`, {
@@ -25,8 +25,7 @@ This endpoint allows an external URL to navigate to and influence any other endp
     body: JSON.stringify({
         image_url: 'http://127.0.0.1:5000/internal/secret'
     })
-    }).then(r => r.json()).then(console.log);`
-
+    }).then(r => r.json()).then(console.log);
 ![alt text](./screenshots/SSRF-pic_a.png)
 
 Feel free to attempt this with other internal endpoints like `http://127.0.0.1:5000/internal/config.json` and `http://127.0.0.1:5000/latest/meta-data/` as described in the original vuln-bank docs.
@@ -38,7 +37,7 @@ Feel free to attempt this with other internal endpoints like `http://127.0.0.1:5
 
 3. Paste the following code, press enter, then observe outcome (succeeds; domain on allowlist):
 
-    `const origin = window.location.origin;
+    ```const origin = window.location.origin;
     const token = localStorage.getItem('jwt_token');
 
     fetch(`${origin}/upload_profile_picture_url`, {
@@ -50,7 +49,7 @@ Feel free to attempt this with other internal endpoints like `http://127.0.0.1:5
     body: JSON.stringify({
         image_url: 'https://oregonstate.edu/sites/default/files/2023-09/corvallis-aerial-900x600.jpg'
     })
-    }).then(r => r.json()).then(console.log);`
+    }).then(r => r.json()).then(console.log);
 ![alt text](./screenshots/SSRF-goodurl.png)
 
 
