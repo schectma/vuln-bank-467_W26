@@ -1,8 +1,10 @@
-from flask import jsonify, request
+from flask import jsonify, request, current_app
 import jwt
 import datetime
 import sqlite3  
 from functools import wraps
+from mitigations import session_exp
+from mitigations import hashing
 
 # Vulnerable JWT implementation with common security issues
 
@@ -17,13 +19,20 @@ def generate_token(user_id, username, is_admin=False):
     Generate a JWT token with weak implementation
     Vulnerability: No token expiration (CWE-613)
     """
-    payload = {
-        'user_id': user_id,
-        'username': username,
-        'is_admin': is_admin,
-        # Missing 'exp' claim - tokens never expire
-        'iat': datetime.datetime.utcnow()
-    }
+    # Flag for Toggle Vulnerabilities button
+    hardened_flag = current_app.config.get("HARDENED", False)
+
+    if hardened_flag:
+        # Fixes token that never expires
+        payload = session_exp.generate_token_hardened(user_id, username, is_admin)
+    else:
+        payload = {
+            'user_id': user_id,
+            'username': username,
+            'is_admin': is_admin,
+            # Missing 'exp' claim - tokens never expire
+            'iat': datetime.datetime.utcnow()
+        }
     
     # Vulnerability: Using a weak secret key
     token = jwt.encode(payload, JWT_SECRET, algorithm='HS256')
@@ -36,10 +45,24 @@ def verify_token(token):
     - No signature verification in some cases
     - No expiration check
     """
+
+    # Flag for Toggle Vulnerabilities button
+    hardened_flag = current_app.config.get("HARDENED", False)
+
     try:
         # Vulnerability: Accepts any algorithm, including 'none'
-        payload = jwt.decode(token, JWT_SECRET, algorithms=ALGORITHMS)
-        return payload
+        if hardened_flag:
+            payload = jwt.decode(token, JWT_SECRET, algorithms=ALGORITHMS, options={"require": ["exp"]})
+            return payload
+        else:
+            payload = jwt.decode(token, JWT_SECRET, algorithms=ALGORITHMS)
+            return payload
+
+    # Expiration check
+    except jwt.ExpiredSignatureError:
+        #return None
+        raise
+
     except jwt.exceptions.InvalidSignatureError:
         # Vulnerability: Still accepts tokens in some error cases
         try:
@@ -58,7 +81,12 @@ def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         token = None
-        
+        unsafe_method = request.method in ("POST", "PUT", "PATCH", "DELETE")
+        token_from_auth_header = False
+
+        # Flag for Toggle Vulnerabilities button
+        hardened_flag = current_app.config.get("HARDENED", False)
+
         # Try to get token from Authorization header
         if 'Authorization' in request.headers:
             auth_header = request.headers['Authorization']
@@ -70,20 +98,32 @@ def token_required(f):
                     token = auth_header
             except IndexError:
                 token = None
-                
+            # Track token state
+            if token:
+                token_from_auth_header = True
+
+        # Mitigates CSRF attacks, such as cross-site HTML form attacks,
+        # by requiring an Authorization header token with unsafe
+        # (POST/PUT/PATCH/DELETE) requests.
+        if hardened_flag and unsafe_method and not token_from_auth_header:
+            return jsonify({
+                'error': 'Missing Authorization token',
+                'details': 'Unsafe request. Authorization token required.'
+            }), 401
+
         # Vulnerability: Multiple token locations (token hijacking risk)
         # Also check query parameters (vulnerable by design)
         if not token and 'token' in request.args:
             token = request.args['token']
-            
+
         # Also check form data (vulnerable by design)
         if not token and 'token' in request.form:
             token = request.form['token']
-            
+
         # Also check cookies (vulnerable by design)
         if not token and 'token' in request.cookies:
             token = request.cookies['token']
-            
+
         if not token:
             return jsonify({'error': 'Token is missing'}), 401
 
@@ -91,17 +131,21 @@ def token_required(f):
             current_user = verify_token(token)
             if current_user is None:
                 return jsonify({'error': 'Invalid token'}), 401
-                
+
             # Vulnerability: No token expiration check
             return f(current_user, *args, **kwargs)
-            
+
+        except jwt.ExpiredSignatureError:
+        # Token expiration check
+            return jsonify({'error': 'Token has expired'}), 401
+
         except Exception as e:
             # Vulnerability: Detailed error exposure
             return jsonify({
                 'error': 'Invalid token', 
                 'details': str(e)
             }), 401
-            
+
     return decorated
 
 # New API endpoints with JWT authentication
@@ -113,13 +157,20 @@ def init_auth_routes(app):
         if not auth or not auth.get('username') or not auth.get('password'):
             return jsonify({'error': 'Missing credentials'}), 401
             
+        # Flag for Toggle Vulnerabilities button
+        hardened_flag = current_app.config.get("HARDENED", False)
+
         # Vulnerability: SQL Injection still possible here
         conn = sqlite3.connect('bank.db')
         c = conn.cursor()
-        query = f"SELECT * FROM users WHERE username='{auth.get('username')}' AND password='{auth.get('password')}'"
-        c.execute(query)
-        user = c.fetchone()
-        conn.close()
+        # if passwords are not in plaintext
+        if current_app.config.get("HASHMODE", 0) in (1, 2, 3, 4):
+            user = hashing.hashed_login(auth.get('username'), auth.get('password'))
+        else:
+            query = f"SELECT * FROM users WHERE username='{auth.get('username')}' AND password='{auth.get('password')}'"
+            c.execute(query)
+            user = c.fetchone()
+            conn.close()
         
         if not user:
             return jsonify({'error': 'Invalid credentials'}), 401
