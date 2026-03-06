@@ -1,6 +1,7 @@
 import os
 from urllib.parse import urlparse
 
+
 def build_db_config():
     """Select and set actual database used upon launch of app.
     Dependent on state of USE_TEST_DB, which is set in test_sqli.py.
