@@ -8,7 +8,7 @@ Browser access to functioning web app and two registered user accounts, at least
 
 ***Important Note***
 
-Complete setup of at least one VC is necessary for pentesting:
+Complete setup of at least one VC is necessary for pentesting. Should none be available, please [reset the database](../README.md#resetting-the-database). Should that not be an option, or should you prefer a different balance, take the following steps:
 1. Create VC via web app UI. Set the limit to 1000.
 2. Open the browser console and execute the following command:
     `const token = localStorage.getItem('jwt_token');
@@ -24,7 +24,7 @@ Complete setup of at least one VC is necessary for pentesting:
     })
     .then(r => r.json())
     .then(console.log);`
-<vc_num> should be `1` if this instance of the web app is fresh and the VC added above is the first and only.
+<vc_num> should be `1` if this instance of the web app is fresh and the VC added above is the first and only. `current_balance` may be any value between 0 and the card's limit.
 
 3. Refresh the page, scroll down, and confirm VC balance if desired.
 
