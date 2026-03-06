@@ -1,3 +1,42 @@
+// Limit alert popups to once per page load (prevents spam from multiple stored XSS payloads)
+const _originalAlert = window.alert;
+let _alertShown = false;
+window.alert = function(msg) {
+    if (!_alertShown) {
+        _alertShown = true;
+        _originalAlert(msg);
+    }
+};
+
+// Global security configuration
+let XSS_PROTECTION_ENABLED = false;
+let SECURITY_HARDENING_ENABLED = false;
+
+// Fetch security configuration
+async function loadSecurityConfig() {
+    try {
+        const response = await fetch('/api/security-config');
+        const data = await response.json();
+        XSS_PROTECTION_ENABLED = data.xss_protection_enabled;
+        SECURITY_HARDENING_ENABLED = data.security_hardening_enabled;
+    } catch (error) {
+        console.error('Failed to load security config:', error);
+    }
+}
+
+// XSS Protection: HTML escape function
+// When XSS_PROTECTION_ENABLED=true, escapes HTML to prevent script execution
+// When XSS_PROTECTION_ENABLED=false, returns raw string (vulnerable to XSS)
+function escapeHTML(str) {
+    if (!XSS_PROTECTION_ENABLED) {
+        return str; // Vulnerable mode - no escaping
+    }
+    // Protected mode - escape HTML entities
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
 // Set current date
 document.addEventListener('DOMContentLoaded', function() {
     const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
@@ -6,7 +45,8 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // Vulnerability: Token stored in localStorage
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
+    await loadSecurityConfig();
     const token = localStorage.getItem('jwt_token');
     if (!token) {
         window.location.href = '/login';
@@ -109,22 +149,22 @@ async function handleTransfer(event) {
         const data = await response.json();
         if (data.status === 'success') {
             // Update message and balance
-            document.getElementById('message').innerHTML = data.message;
-            document.getElementById('message').style.color = 'green';
+            document.getElementById('transfer-message').innerHTML = escapeHTML(data.message);
+            document.getElementById('transfer-message').style.color = 'green';
             document.getElementById('balance').textContent = data.new_balance;
-            
+
             // Refresh transactions
             fetchTransactions();
-            
+
             // Clear form
             event.target.reset();
         } else {
-            document.getElementById('message').innerHTML = data.message;
-            document.getElementById('message').style.color = 'red';
+            document.getElementById('transfer-message').innerHTML = escapeHTML(data.message);
+            document.getElementById('transfer-message').style.color = 'red';
         }
     } catch (error) {
-        document.getElementById('message').innerHTML = 'Transfer failed';
-        document.getElementById('message').style.color = 'red';
+        document.getElementById('transfer-message').innerHTML = 'Transfer failed';
+        document.getElementById('transfer-message').style.color = 'red';
     }
 }
 
@@ -185,7 +225,7 @@ async function handleLoanRequest(event) {
             // Clear form
             event.target.reset();
         } else {
-            document.getElementById('message').innerHTML = data.message;
+            document.getElementById('message').innerHTML = escapeHTML(data.message);
             document.getElementById('message').style.color = 'red';
         }
     } catch (error) {
@@ -259,7 +299,6 @@ async function handleProfileUrlImport() {
 
 
 // Fetch transactions
-// Vulnerability: No rate limiting on transaction fetches
 async function fetchTransactions() {
     try {
         const accountNumber = document.getElementById('account-number').textContent;
@@ -270,17 +309,19 @@ async function fetchTransactions() {
         });
 
         const data = await response.json();
+        const transactionList = document.getElementById('transaction-list');
+
         if (data.status === 'success') {
             if (data.transactions.length === 0) {
-                document.getElementById('transaction-list').innerHTML = '<p style="text-align: center; padding: 2rem;">No transactions found</p>';
+                transactionList.innerHTML = '<p style="text-align: center; padding: 2rem;">No transactions found</p>';
                 return;
             }
-            
-            // Vulnerability: innerHTML used with unsanitized data
+
+            // Vulnerability: XSS possible in transaction description
             const transactionHtml = data.transactions.map(t => {
                 const isOutgoing = t.from_account === accountNumber;
                 const transactionType = isOutgoing ? 'sent' : 'received';
-                
+
                 return `
                     <div class="transaction-item ${transactionType}">
                         <div class="transaction-details">
@@ -288,7 +329,7 @@ async function fetchTransactions() {
                                 ${isOutgoing ? 'To: ' + t.to_account : 'From: ' + t.from_account}
                             </div>
                             <div class="transaction-date">${t.timestamp}</div>
-                            ${t.description ? `<div class="transaction-description">${t.description}</div>` : ''}
+                            ${t.description ? `<div class="transaction-description">${escapeHTML(t.description)}</div>` : ''}
                         </div>
                         <div class="transaction-amount ${transactionType}">
                             ${isOutgoing ? '-' : '+'}$${Math.abs(t.amount)}
@@ -296,10 +337,10 @@ async function fetchTransactions() {
                     </div>
                 `;
             }).join('');
-            
-            document.getElementById('transaction-list').innerHTML = transactionHtml;
+
+            transactionList.innerHTML = transactionHtml;
         } else {
-            document.getElementById('transaction-list').innerHTML = '<p style="text-align: center; padding: 2rem;">Error loading transactions</p>';
+            transactionList.innerHTML = '<p style="text-align: center; padding: 2rem;">Error loading transactions</p>';
         }
     } catch (error) {
         document.getElementById('transaction-list').innerHTML = '<p style="text-align: center; padding: 2rem;">Error loading transactions</p>';
@@ -335,11 +376,11 @@ function renderVirtualCards() {
         container.innerHTML = '<p style="text-align: center;">No virtual cards found. Create one to get started.</p>';
         return;
     }
-    
-    // Vulnerability: XSS possible in card rendering
+
+    // Vulnerability: XSS possible in card type field
     container.innerHTML = virtualCards.map(card => `
         <div class="virtual-card ${card.is_frozen ? 'frozen' : ''}" id="card-${card.id}">
-            <div class="card-type">${card.card_type.toUpperCase()}</div>
+            <div class="card-type">${escapeHTML(card.card_type.toUpperCase())}</div>
             <div class="card-number">${formatCardNumber(card.card_number)}</div>
             <div class="card-details">
                 <div>Exp: ${card.expiry_date}</div>
@@ -443,7 +484,7 @@ async function handleCreateCard(event) {
             document.getElementById('message').innerHTML = 'Virtual card created successfully!';
             document.getElementById('message').style.color = 'green';
         } else {
-            document.getElementById('message').innerHTML = data.message;
+            document.getElementById('message').innerHTML = escapeHTML(data.message);
             document.getElementById('message').style.color = 'red';
         }
     } catch (error) {
@@ -465,7 +506,7 @@ async function toggleCardFreeze(cardId) {
         if (data.status === 'success') {
             await fetchVirtualCards();
         } else {
-            document.getElementById('message').innerHTML = data.message;
+            document.getElementById('message').innerHTML = escapeHTML(data.message);
             document.getElementById('message').style.color = 'red';
         }
     } catch (error) {
@@ -510,7 +551,7 @@ async function showTransactionHistory(cardId) {
             
             modal.style.display = 'flex';
         } else {
-            document.getElementById('message').innerHTML = data.message;
+            document.getElementById('message').innerHTML = escapeHTML(data.message);
             document.getElementById('message').style.color = 'red';
         }
     } catch (error) {
@@ -572,7 +613,7 @@ async function handleCardUpdate(event, cardId) {
             document.getElementById('message').innerHTML = 'Card limit updated successfully';
             document.getElementById('message').style.color = 'green';
         } else {
-            document.getElementById('message').innerHTML = data.message;
+            document.getElementById('message').innerHTML = escapeHTML(data.message);
             document.getElementById('message').style.color = 'red';
         }
     } catch (error) {
@@ -600,14 +641,15 @@ async function loadBillCategories() {
     try {
         const response = await fetch('/api/bill-categories');
         const data = await response.json();
-        
+
         if (data.status === 'success') {
             const select = document.getElementById('billCategory');
-            // Vulnerability: XSS possible in category name and description
+
+            // Vulnerability: XSS possible in category names
             select.innerHTML = `
                 <option value="">Select Category</option>
                 ${data.categories.map(cat => `
-                    <option value="${cat.id}">${cat.name}</option>
+                    <option value="${cat.id}">${escapeHTML(cat.name)}</option>
                 `).join('')}
             `;
         }
@@ -618,53 +660,59 @@ async function loadBillCategories() {
 
 // Load billers for selected category
 async function loadBillers(categoryId) {
+    const select = document.getElementById('biller');
+
     if (!categoryId) {
-        const select = document.getElementById('biller');
-        select.innerHTML = '<option value="">Select Biller</option>';
+        select.innerHTML = '';
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = 'Select Biller';
+        select.appendChild(option);
         select.disabled = true;
         return;
     }
-    
+
     try {
         const response = await fetch(`/api/billers/by-category/${categoryId}`);
         const data = await response.json();
-        
-        const select = document.getElementById('biller');
+
         if (data.status === 'success') {
-            // Create a Map to store unique billers by name
             const billerMap = new Map();
-            
-            // Only keep the first occurrence of each biller name
             data.billers.forEach(biller => {
                 if (!billerMap.has(biller.name)) {
                     billerMap.set(biller.name, biller);
                 }
             });
 
-            // Convert Map values back to array
             const uniqueBillers = Array.from(billerMap.values());
-
-            // Sort billers by name for consistency
             uniqueBillers.sort((a, b) => a.name.localeCompare(b.name));
 
+            // Vulnerability: XSS possible in biller names
             select.innerHTML = `
                 <option value="">Select Biller</option>
                 ${uniqueBillers.map(biller => `
-                    <option value="${biller.id}" 
+                    <option value="${biller.id}"
                             data-min="${biller.minimum_amount}"
                             data-max="${biller.maximum_amount || ''}"
-                    >${biller.name}</option>
+                    >${escapeHTML(biller.name)}</option>
                 `).join('')}
             `;
             select.disabled = false;
         } else {
-            select.innerHTML = '<option value="">No billers available</option>';
+            select.innerHTML = '';
+            const option = document.createElement('option');
+            option.value = '';
+            option.textContent = 'No billers available';
+            select.appendChild(option);
             select.disabled = true;
         }
     } catch (error) {
         console.error('Error loading billers:', error);
-        const select = document.getElementById('biller');
-        select.innerHTML = '<option value="">Error loading billers</option>';
+        select.innerHTML = '';
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = 'Error loading billers';
+        select.appendChild(option);
         select.disabled = true;
     }
 }
@@ -750,7 +798,7 @@ async function handleBillPayment(event) {
                 balanceElement.textContent = (currentBalance - jsonData.amount).toFixed(2);
             }
         } else {
-            document.getElementById('message').innerHTML = data.message;
+            document.getElementById('message').innerHTML = escapeHTML(data.message);
             document.getElementById('message').style.color = 'red';
         }
     } catch (error) {
@@ -791,7 +839,7 @@ async function loadPaymentHistory() {
                         </div>
                         <div>Reference: ${payment.reference}</div>
                         <div>Date: ${new Date(payment.created_at).toLocaleString()}</div>
-                        ${payment.description ? `<div>Description: ${payment.description}</div>` : ''}
+                        ${payment.description ? `<div>Description: ${escapeHTML(payment.description)}</div>` : ''}
                     </div>
                 </div>
             `).join('');

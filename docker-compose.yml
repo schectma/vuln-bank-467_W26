@@ -9,6 +9,8 @@ services:
       # - "443:5000" 
 
     environment:
+      - APP_ENV=dev
+
       - DB_NAME=vulnerable_bank
       - DB_USER=postgres
       - DB_PASSWORD=postgres

