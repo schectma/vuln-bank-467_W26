@@ -153,7 +153,7 @@ A **Reset Database** button on the landing page and in the admin control panel w
 
 ### Exploring Vulnerabilities
 
-See the [DOCS/](DOCS/) directory for step by step guides on exploiting and mitigating each vulnerability. The [DOCS/README.md](DOCS/README.md) provides an application walkthrough with architecture diagrams.
+See the [DOCS/](DOCS/) directory for step by step guides on exploiting and mitigating each vulnerability.
 
 ## Project Structure
 
