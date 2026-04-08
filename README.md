@@ -140,6 +140,34 @@ New users can register through the UI and start with a $1,000 balance.
 
 The landing page includes a **Harden** toggle button that enables or disables all security mitigations at once. Individual protections (SQL injection, hashing, CORS, etc.) can also be toggled independently through the API.
 
+```mermaid
+sequenceDiagram
+   actor User
+   participant UI as Web UI / API Client
+   participant App as Flask App
+   participant Toggle as /api/toggle/harden
+   participant Config as Runtime Security Flags
+   participant Route as Protected Route
+
+   User->>UI: Click Harden toggle (or call toggle endpoint)
+   UI->>App: POST /api/toggle/harden
+   App->>Toggle: Process toggle request
+   Toggle->>Config: Flip hardening state and refresh runtime behavior
+   Config-->>App: Updated protection mode
+   App-->>UI: Return current hardened status
+
+   User->>UI: Trigger normal app action
+   UI->>Route: Send request to feature endpoint
+
+   alt Hardening disabled
+      Route-->>UI: Execute vulnerable path
+   else Hardening enabled
+      Route-->>UI: Execute mitigated path
+   end
+
+   UI-->>User: Show result for selected mode
+```
+
 - **Hardening off (default):** The application runs in its vulnerable state, all built in weaknesses are active.
 - **Hardening on:** Parameterized queries, input validation, security headers, rate limiting, and other protections are activated.
 
