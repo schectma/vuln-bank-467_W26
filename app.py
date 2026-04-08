@@ -322,7 +322,12 @@ def generate_cvv():
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    # Provide defaults explicitly so template JS does not depend on Jinja fallback filters.
+    return render_template(
+        'index.html',
+        hashmode=0,
+        hardened=SECURITY_HARDENING_ENABLED,
+    )
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
