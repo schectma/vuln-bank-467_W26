@@ -4,6 +4,7 @@ static/uploads/*.mp4
 __pycache__
 ./mitigations/__pycache__
 ./static/uploads/*
+./DOCS/README.md
 
 !static/uploads/admin.png
 !static/uploads/banking-app.png
