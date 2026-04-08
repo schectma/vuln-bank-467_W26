@@ -10,6 +10,7 @@ from auth import generate_token, token_required, verify_token, init_auth_routes
 import auth
 from werkzeug.utils import secure_filename
 from flask_swagger_ui import get_swaggerui_blueprint
+from flask_cors import CORS
 from database import init_connection_pool, init_db, execute_query, execute_transaction
 from ai_agent_deepseek import ai_agent
 import time
@@ -18,16 +19,7 @@ from collections import defaultdict
 import requests
 from urllib.parse import urlparse
 import platform
-import psycopg2
-import secrets
-from mitigations import BOLA, MA, SSRF
-from mitigations import sql_injections
-from mitigations import session_exp
-from mitigations import SSRF
-from mitigations import rate_limiting
-from mitigations import hashing
 from pathlib import Path
-
 
 # Load environment variables
 load_dotenv()
@@ -37,30 +29,32 @@ app = Flask(__name__)
 
 def seed_database_on_startup():
     """
-    Seed database once on app startup if seed users don't exist.
+    Seed demo data after the database pool is available.
     """
     try:
         from database import get_connection
+
+        seed_file = Path(__file__).parent / 'seed_data.sql'
+        if not seed_file.exists():
+            print('[startup] Seed file not found, skipping demo data load')
+            return
+
         conn = get_connection()
-        with conn.cursor() as cur:
-            # Check if seed users already exist
-            cur.execute("SELECT COUNT(*) FROM users WHERE username IN ('testuser1', 'testuser2', 'testuser3');")
-            if cur.fetchone()[0] > 0:
-                return
-            
-            # Load and execute seed SQL
-            seed_file = Path(__file__).parent / "seed_data.sql"
-            if seed_file.exists():
-                with open(seed_file, "r", encoding="utf-8") as f:
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT COUNT(*) FROM users WHERE username IN ('testuser1', 'testuser2', 'testuser3')")
+                if cur.fetchone()[0] > 0:
+                    return
+
+                with open(seed_file, 'r', encoding='utf-8') as f:
                     cur.execute(f.read())
                 conn.commit()
+                print('[startup] Seed data loaded successfully')
+        finally:
+            from database import return_connection
+            return_connection(conn)
     except Exception as e:
-        print(f"[startup] Seed failed: {e}")
-
-# Initialize database connection pool
-#init_connection_pool()
-if os.getenv("APP_ENV") != "test":
-    init_connection_pool()
+        print(f'[startup] Seed failed: {e}')
 
 SWAGGER_URL = '/api/docs'
 API_URL = '/static/openapi.json'
@@ -76,47 +70,17 @@ swaggerui_blueprint = get_swaggerui_blueprint(
 
 app.register_blueprint(swaggerui_blueprint, url_prefix=SWAGGER_URL)
 
-# ==========================================
-# VULNERABILITY TOGGLE CONFIGURATION
-# ==========================================
-# All toggles default to 'false' (vulnerable) for demonstration purposes
-# Set to 'true' in .env to enable protections
-
-# Cross-Site Scripting (XSS) Protection
+# Security toggle configuration
 XSS_PROTECTION_ENABLED = os.getenv('XSS_PROTECTION_ENABLED', 'false').lower() == 'true'
 
-# Security Misconfiguration
+# Security Misconfiguration toggle configuration
 SECURITY_HARDENING_ENABLED = os.getenv('SECURITY_HARDENING_ENABLED', 'false').lower() == 'true'
 FLASK_SECRET_KEY = os.getenv('FLASK_SECRET_KEY', 'secret123')
 JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'secret123')
 ALLOWED_CORS_ORIGINS = os.getenv('ALLOWED_CORS_ORIGINS', '').split(',') if os.getenv('ALLOWED_CORS_ORIGINS') else []
 
-# Hardening feature flag
-harden = SECURITY_HARDENING_ENABLED
-
-# SQL Injection Protection
-SQL_INJECTION_PROTECTION = os.getenv('SQL_INJECTION_PROTECTION', 'false').lower() == 'true'
-
-# Broken Authorization (BOLA)
-AUTHORIZATION_ENABLED = os.getenv('AUTHORIZATION_ENABLED', 'false').lower() == 'true'
-
-# Information Disclosure Protection
-INFORMATION_DISCLOSURE_PROTECTION = os.getenv('INFORMATION_DISCLOSURE_PROTECTION', 'false').lower() == 'true'
-
-# Mass Assignment Protection
-MASS_ASSIGNMENT_PROTECTION = os.getenv('MASS_ASSIGNMENT_PROTECTION', 'false').lower() == 'true'
-
-# Password Hashing
-PASSWORD_HASHING_ENABLED = os.getenv('PASSWORD_HASHING_ENABLED', 'false').lower() == 'true'
-
-# File Upload Validation
-FILE_UPLOAD_VALIDATION = os.getenv('FILE_UPLOAD_VALIDATION', 'false').lower() == 'true'
-
-# AI Prompt Injection Protection
-AI_PROMPT_INJECTION_PROTECTION = os.getenv('AI_PROMPT_INJECTION_PROTECTION', 'false').lower() == 'true'
-
-# Flask secret key configuration
-if harden:
+# Flask secret key configuration (CWE-798)
+if SECURITY_HARDENING_ENABLED:
     # Hardened: Use strong secret from environment
     app.secret_key = FLASK_SECRET_KEY
     # Validate secret strength
@@ -128,52 +92,22 @@ else:
     # Vulnerable: Hardcoded weak secret
     app.secret_key = "secret123"
 
-# CORS is handled dynamically in before_request and after_request hooks
-# to support runtime toggling without app restart
-
-# CORS origin validation
-@app.before_request
-def validate_cors_origin():
-    """
-    Block requests from unauthorized origins when hardened.
-    In vulnerable mode, allow all origins including null (file://).
-    """
-    hardened = app.config.get('HARDENED', False)
-    origin = request.headers.get('Origin')
-
-    # Determine same-origin
-    if origin:
-        scheme = 'https' if request.is_secure else 'http'
-        same_origin = f"{scheme}://{request.host}"
-        is_same_origin = (origin == same_origin)
-    else:
-        is_same_origin = True  # No Origin header = same-origin or non-browser request
-
-    # Handle OPTIONS preflight requests
-    if request.method == 'OPTIONS':
-        if hardened and origin and not is_same_origin:
-            # In hardened mode, block unauthorized cross-origin requests
-            if origin == 'null':
-                return jsonify({'error': 'CORS origin not allowed'}), 403
-            if ALLOWED_CORS_ORIGINS:
-                if origin not in ALLOWED_CORS_ORIGINS:
-                    return jsonify({'error': 'CORS origin not allowed'}), 403
-            else:
-                return jsonify({'error': 'CORS origin not allowed'}), 403
-        return make_response('', 200)
-
-    # Handle actual requests (GET, POST, etc.)
-    if hardened and origin and not is_same_origin:
-        # Block null origins (file://)
-        if origin == 'null':
-            return jsonify({'error': 'CORS origin not allowed'}), 403
-        # Check whitelist if configured
-        if ALLOWED_CORS_ORIGINS:
-            if origin not in ALLOWED_CORS_ORIGINS:
-                return jsonify({'error': 'CORS origin not allowed'}), 403
-        else:
-            # No whitelist - block all cross-origin
-            return jsonify({'error': 'CORS origin not allowed'}), 403
+# CORS configuration
+if SECURITY_HARDENING_ENABLED and ALLOWED_CORS_ORIGINS:
+    # Hardened: Restrict CORS to specific origins
+    CORS(app, resources={
+        r"/api/*": {
+            "origins": ALLOWED_CORS_ORIGINS,
+            "methods": ["GET", "POST", "PUT", "DELETE"],
+            "allow_headers": ["Content-Type", "Authorization"],
+            "expose_headers": ["Content-Type"],
+            "supports_credentials": True,
+            "max_age": 600
+        }
+    })
+else:
+    # Vulnerable: Allow all origins
+    CORS(app)
 
 # Security headers middleware
 @app.after_request
@@ -183,7 +117,7 @@ def set_security_headers(response):
     When hardening is enabled, adds comprehensive security headers.
     When disabled (vulnerable), exposes debug information.
     """
-    if app.config.get('HARDENED', False):
+    if SECURITY_HARDENING_ENABLED:
         # Hardened: Add security headers
         response.headers['X-Content-Type-Options'] = 'nosniff'
         response.headers['X-Frame-Options'] = 'DENY'
@@ -204,15 +138,6 @@ def set_security_headers(response):
         response.headers.pop('X-Debug-Info', None)
         response.headers.pop('X-User-Info', None)
         response.headers.pop('Server', None)
-
-        # Hardened: CORS headers for allowed origins only
-        origin = request.headers.get('Origin')
-        if origin and ALLOWED_CORS_ORIGINS and origin in ALLOWED_CORS_ORIGINS:
-            response.headers['Access-Control-Allow-Origin'] = origin
-            response.headers['Access-Control-Allow-Credentials'] = 'true'
-            response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
-            response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-            response.headers['Access-Control-Max-Age'] = '600'
     else:
         # Vulnerable: No security headers, expose server info
         try:
@@ -220,17 +145,6 @@ def set_security_headers(response):
         except AttributeError:
             flask_version = '2.0.1'  # Fallback version
         response.headers['Server'] = f'Flask/{flask_version} Python/{platform.python_version()}'
-        # Vulnerable: Override CORS to allow ALL origins including file://
-        # This makes the attack work from file:// URLs (null origin)
-        origin = request.headers.get('Origin')
-        if origin:
-            response.headers['Access-Control-Allow-Origin'] = origin
-            response.headers['Access-Control-Allow-Credentials'] = 'true'
-            response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
-            response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-        else:
-            # For requests without Origin header (like direct navigation)
-            response.headers['Access-Control-Allow-Origin'] = '*'
 
     return response
 
@@ -246,7 +160,7 @@ def format_error_response(error, status_code=500, include_debug=None):
     Returns:
         JSON response tuple (dict, status_code)
     """
-    if harden:
+    if SECURITY_HARDENING_ENABLED:
         # Hardened: Generic error message
         return jsonify({
             'status': 'error',
@@ -264,12 +178,6 @@ def format_error_response(error, status_code=500, include_debug=None):
         if include_debug:
             error_response['debug_info'] = include_debug
         return jsonify(error_response), status_code
-
-# Preserve JSON key insertion order (don't sort alphabetically)
-app.config['JSON_SORT_KEYS'] = False
-
-# Set Flask config from harden variable
-app.config["HARDENED"] = harden
 
 # Rate limiting configuration
 RATE_LIMIT_WINDOW = 3 * 60 * 60  # 3 hours in seconds
@@ -318,12 +226,6 @@ def check_rate_limit(key, limit):
     # Add current request
     rate_limit_storage[key].append((current_time, 1))
     return True, request_count + 1, limit
-
-
-# Necessary for using helpers in rate-limiting.py
-rate_limiting.init_rate_limiting(get_client_ip, check_rate_limit)
-ip_rate_limit = rate_limiting.ip_rate_limit
-
 
 def ai_rate_limit(f):
     """Rate limiting decorator for AI endpoints"""
@@ -420,17 +322,9 @@ def generate_cvv():
 
 @app.route('/')
 def index():
-    vulnState = app.config.get("HARDENED", False)
-    hashState = app.config.get("HASHMODE", 0)
-    return render_template('index.html', hardened=vulnState, hashmode=hashState)
-
-@app.route('/tools/forge-jwt')
-def forge_jwt_tool():
-    """Serve the JWT forgery tool from localhost (secure context for crypto.subtle)."""
-    return flask.send_from_directory('.', 'forge_jwt.html')
+    return render_template('index.html')
 
 @app.route('/register', methods=['GET', 'POST'])
-@ip_rate_limit(prefix="register", limit=5)
 def register():
     if request.method == 'POST':
         try:
@@ -451,40 +345,17 @@ def register():
                     'username': user_data.get('username'),
                     'tried_at': str(datetime.now())  # Information disclosure
                 }), 400
-
-            if harden:
-                # HARDENED: registration field whitelist
-                ALLOWED_REGISTRATION_FIELDS = ['username', 'password']
-
-            if app.config.get("HASHMODE", 0) in (1, 2, 3, 4):
-                fields = ['username', 'password', 'account_number']
-                # Hash the password before storing
-                values = [user_data.get('username'), hashing.create_hashed_password(user_data.get('password')), account_number]
-
-            else:
-                # Build dynamic query based on user input fields
-                # Vulnerability: Mass Assignment possible here
-                fields = ['username', 'password', 'account_number']
-                values = [user_data.get('username'), user_data.get('password'), account_number]
-
-            # Save plaintext version
-            hashing.save_plaintext(user_data.get('username'), user_data.get('password'))
             
-            if harden:
-                # HARDEN: validate input against whitelist
-                for key in user_data.keys():
-                    if key not in ALLOWED_REGISTRATION_FIELDS:
-                        return jsonify({
-                            'status': 'error',
-                            'message': f'Invalid field: {key}. Only username and password are allowed.',
-                            'allowed_fields': ALLOWED_REGISTRATION_FIELDS
-                        }), 400
-            else:
-                # Include any additional parameters from user input
-                for key, value in user_data.items():
-                    if key not in ['username', 'password']:
-                        fields.append(key)
-                        values.append(value)
+            # Build dynamic query based on user input fields
+            # Vulnerability: Mass Assignment possible here
+            fields = ['username', 'password', 'account_number']
+            values = [user_data.get('username'), user_data.get('password'), account_number]
+            
+            # Include any additional parameters from user input
+            for key, value in user_data.items():
+                if key not in ['username', 'password']:
+                    fields.append(key)
+                    values.append(value)
             
             # Build the SQL query dynamically
             query = f"""
@@ -501,7 +372,7 @@ def register():
             user = result[0]
 
             # Excessive Data Exposure in Response
-            if harden:
+            if SECURITY_HARDENING_ENABLED:
                 # Hardened: Minimal response data
                 sensitive_data = {
                     'status': 'success',
@@ -548,7 +419,6 @@ def register():
     return render_template('register.html')
 
 @app.route('/login', methods=['GET', 'POST'])
-@ip_rate_limit(prefix="login", limit=6)
 def login():
     if request.method == 'POST':
         try:
@@ -557,24 +427,13 @@ def login():
             password = data.get('password')
             
             print(f"Login attempt - Username: {username}")  # Debug print
-
-            if app.config.get("HASHMODE", 0) in (1, 2, 3, 4):
-                # Returns user information from database
-                user_row = hashing.hashed_login(username, password)
-                # user_row will be returned if valid password/username
-                user = [user_row] if user_row else []
-            elif harden:
-                # Fixes SQL injection vulnerability
-                query = sql_injections.login_hardened()
-                print(f"Debug - Login query: {query}")  # Debug print
-                user = execute_query(query, (username, password))
-                print(f"Debug - Query result: {user}")  # Debug print
-            else:
-                # SQL Injection vulnerability (intentionally vulnerable)
-                query = f"SELECT * FROM users WHERE username='{username}' AND password='{password}'"
-                print(f"Debug - Login query: {query}")  # Debug print
-                user = execute_query(query)
-                print(f"Debug - Query result: {user}")  # Debug print
+            
+            # SQL Injection vulnerability (intentionally vulnerable)
+            query = f"SELECT * FROM users WHERE username='{username}' AND password='{password}'"
+            print(f"Debug - Login query: {query}")  # Debug print
+            
+            user = execute_query(query)
+            print(f"Debug - Query result: {user}")  # Debug print
             
             if user and len(user) > 0:
                 user = user[0]  # Get first row
@@ -599,24 +458,20 @@ def login():
                     }
                 }))
 
-                # Session cookie security configuration
-                if harden:
+                # Session cookie security configuration (CWE-614)
+                if SECURITY_HARDENING_ENABLED:
                     # Hardened: Secure cookie configuration
-                    # Only set Secure flag when actually on HTTPS;
-                    # on HTTP localhost the Secure flag would prevent
-                    # the cookie from being stored in some browsers.
-                    is_https = request.is_secure or request.headers.get('X-Forwarded-Proto') == 'https'
                     response.set_cookie(
                         'token',
                         token,
                         httponly=True,
-                        secure=is_https,
-                        samesite='Strict',  # Prevent CSRF attacks
+                        secure=True,  # Requires HTTPS in production
+                        samesite='Lax',  # Prevent CSRF attacks
                         max_age=3600  # 1 hour expiration
                     )
                 else:
-                    # Vulnerable: Cookie without any security flags
-                    response.set_cookie('token', token)
+                    # Vulnerable: Cookie without secure flag
+                    response.set_cookie('token', token, httponly=True)
 
                 return response
             
@@ -632,40 +487,26 @@ def login():
             
         except Exception as e:
             print(f"Login error: {str(e)}")
-            return format_error_response(
-                e,
-                500,
-                include_debug={
-                    'endpoint': 'login',
-                    'error_details': str(e)
-                }
-            )
+            return jsonify({
+                'status': 'error',
+                'message': 'Login failed',
+                'error': str(e)
+            }), 500
         
     return render_template('login.html')
 
 @app.route('/debug/users')
 def debug_users():
-    """
-    Debug endpoint that exposes all users with sensitive data.
-    """
-    if harden:
-        # Protected: Debug endpoint disabled
-        return jsonify({
-            'status': 'error',
-            'message': 'Not found'
-        }), 404
-    else:
-        # Vulnerable: Expose all users with plaintext passwords
-        users = execute_query("SELECT id, username, password, account_number, is_admin FROM users")
-        return jsonify({'users': [
-            {
-                'id': u[0],
-                'username': u[1],
-                'password': u[2],
-                'account_number': u[3],
-                'is_admin': u[4]
-            } for u in users
-        ]})
+    users = execute_query("SELECT id, username, password, account_number, is_admin FROM users")
+    return jsonify({'users': [
+        {
+            'id': u[0],
+            'username': u[1],
+            'password': u[2],
+            'account_number': u[3],
+            'is_admin': u[4]
+        } for u in users
+    ]})
 
 @app.route('/dashboard')
 @token_required
@@ -698,31 +539,22 @@ def dashboard(current_user):
                          account_number=user[3],
                          loans=loans,
                          is_admin=current_user.get('is_admin', False),
-                         xss_protection_enabled=harden or XSS_PROTECTION_ENABLED,
-                         security_hardening_enabled=harden or SECURITY_HARDENING_ENABLED)
+                         xss_protection_enabled=XSS_PROTECTION_ENABLED,
+                         security_hardening_enabled=SECURITY_HARDENING_ENABLED)
 
 # Check balance endpoint
 @app.route('/check_balance/<account_number>')
-@token_required
-def check_balance(current_user, account_number):
-    # User param passed in for use in hardened variant, should it trigger.
-    # if harden:
-    #     return BOLA.check_balance_hardened(current_user, account_number)
-
+def check_balance(account_number):
     # Broken Object Level Authorization (BOLA) vulnerability
-    # Note: When AUTHORIZATION_ENABLED=false, no authentication is required
+    # No authentication check, anyone can check any account balance
     try:
-        if harden:
-            query = BOLA.check_balance_hardened()
-            user = execute_query(query, (account_number, current_user['user_id']))
-        else:
-            # Vulnerability: SQL Injection possible
-            user = execute_query(
-                f"SELECT username, balance FROM users WHERE account_number='{account_number}'"
-            )
-
+        # Vulnerability: SQL Injection possible
+        user = execute_query(
+            f"SELECT username, balance FROM users WHERE account_number='{account_number}'"
+        )
+        
         if user:
-            # Vulnerability: Information disclosure (no authorization check)
+            # Vulnerability: Information disclosure
             return jsonify({
                 'status': 'success',
                 'username': user[0][0],
@@ -731,17 +563,18 @@ def check_balance(current_user, account_number):
             })
         return jsonify({
             'status': 'error',
-            'message': 'Account not found or access denied'
-        }), 403
+            'message': 'Account not found'
+        }), 404
     except Exception as e:
-        debug_info = {
-            'endpoint': 'check_balance',
-            'account_number': account_number
-        }
-        if not SQL_INJECTION_PROTECTION:
-            debug_info['query'] = f"SELECT username, balance FROM users WHERE account_number='{account_number}'"
-
-        return format_error_response(e, 500, include_debug=debug_info)
+        return format_error_response(
+            e,
+            500,
+            include_debug={
+                'endpoint': 'check_balance',
+                'account_number': account_number,
+                'query': f"SELECT username, balance FROM users WHERE account_number='{account_number}'"
+            }
+        )
 
 # Transfer endpoint
 @app.route('/transfer', methods=['POST'])
@@ -794,14 +627,10 @@ def transfer(current_user):
                 })
                 
             except Exception as e:
-                return format_error_response(
-                    e,
-                    500,
-                    include_debug={
-                        'endpoint': 'transfer',
-                        'error_details': str(e)
-                    }
-                )
+                return jsonify({
+                    'status': 'error',
+                    'message': str(e)
+                }), 500
         else:
             return jsonify({
                 'status': 'error',
@@ -822,35 +651,26 @@ def transfer(current_user):
 
 # Get transaction history endpoint
 @app.route('/transactions/<account_number>')
-@token_required
-def get_transaction_history(current_user, account_number):
+def get_transaction_history(account_number):
     # Vulnerability: No authentication required (BOLA)
     # Vulnerability: SQL Injection possible
     try:
-        if harden:
-            query = BOLA.get_transaction_history_hardened()
-            params = (account_number, account_number, current_user['user_id'], current_user['user_id'])
-            transactions = execute_query(query, params)
-        else:
-            query = f"""
-                SELECT
-                    id,
-                    from_account,
-                    to_account,
-                    amount,
-                    timestamp,
-                    transaction_type,
-                    description
-                FROM transactions
-                WHERE from_account='{account_number}' OR to_account='{account_number}'
-                ORDER BY timestamp DESC
-            """
-
-            transactions = execute_query(query)
-
-        if not transactions:
-            return jsonify({'status': 'error', 'message': 'Account not found or access denied'}), 403
-
+        query = f"""
+            SELECT 
+                id,
+                from_account,
+                to_account,
+                amount,
+                timestamp,
+                transaction_type,
+                description
+            FROM transactions 
+            WHERE from_account='{account_number}' OR to_account='{account_number}'
+            ORDER BY timestamp DESC
+        """
+        
+        transactions = execute_query(query)
+        
         # Vulnerability: Information disclosure
         transaction_list = [{
             'id': t[0],
@@ -860,29 +680,23 @@ def get_transaction_history(current_user, account_number):
             'timestamp': str(t[4]),
             'type': t[5],
             'description': t[6]
+            #'query_used': query  # Vulnerability: Exposing SQL query
         } for t in transactions]
-
-        response_data = {
+        
+        return jsonify({
             'status': 'success',
             'account_number': account_number,
-            'transactions': transaction_list
-        }
-
-        if not SECURITY_HARDENING_ENABLED:
-            response_data['server_time'] = str(datetime.now())
-
-        return jsonify(response_data)
-
+            'transactions': transaction_list,
+            'server_time': str(datetime.now())  # Vulnerability: Server information disclosure
+        })
+        
     except Exception as e:
-        return format_error_response(
-            e,
-            500,
-            include_debug={
-                'endpoint': 'get_transaction_history',
-                'account_number': account_number,
-                'error_details': str(e)
-            }
-        )
+        return jsonify({
+            'status': 'error',
+            'message': str(e),
+            'query': query,  # Vulnerability: Query exposure
+            'account_number': account_number
+        }), 500
 
 @app.route('/upload_profile_picture', methods=['POST'])
 @token_required
@@ -947,28 +761,25 @@ def upload_profile_picture_url(current_user):
         if not image_url:
             return jsonify({'status': 'error', 'message': 'image_url is required'}), 400
 
-        if harden:
-            filename, file_path = SSRF.fetch_and_store_image(image_url, UPLOAD_FOLDER)
-        else:
-            # Vulnerabilities:
-            # - No URL scheme/host allowlist (SSRF)
-            # - SSL verification disabled
-            # - Follows redirects
-            # - No content-type or size validation
-            resp = requests.get(image_url, timeout=10, allow_redirects=True, verify=False)
-            if resp.status_code >= 400:
-                return jsonify({'status': 'error', 'message': f'Failed to fetch URL: HTTP {resp.status_code}'}), 400
+        # Vulnerabilities:
+        # - No URL scheme/host allowlist (SSRF)
+        # - SSL verification disabled
+        # - Follows redirects
+        # - No content-type or size validation
+        resp = requests.get(image_url, timeout=10, allow_redirects=True, verify=False)
+        if resp.status_code >= 400:
+            return jsonify({'status': 'error', 'message': f'Failed to fetch URL: HTTP {resp.status_code}'}), 400
 
-            # Derive filename from URL path (user-controlled)
-            parsed = urlparse(image_url)
-            basename = os.path.basename(parsed.path) or 'downloaded'
-            filename = secure_filename(basename)
-            filename = f"{random.randint(1, 1000000)}_{filename}"
-            file_path = os.path.join(UPLOAD_FOLDER, filename)
+        # Derive filename from URL path (user-controlled)
+        parsed = urlparse(image_url)
+        basename = os.path.basename(parsed.path) or 'downloaded'
+        filename = secure_filename(basename)
+        filename = f"{random.randint(1, 1000000)}_{filename}"
+        file_path = os.path.join(UPLOAD_FOLDER, filename)
 
-            # Save content directly without validation
-            with open(file_path, 'wb') as f:
-                f.write(resp.content)
+        # Save content directly without validation
+        with open(file_path, 'wb') as f:
+            f.write(resp.content)
 
         # Store just the filename in DB (same pattern as file upload)
         execute_query(
@@ -983,8 +794,8 @@ def upload_profile_picture_url(current_user):
             'file_path': os.path.join('static/uploads', filename),
             'debug_info': {  # Information disclosure for learning
                 'fetched_url': image_url,
-                'http_status': resp.status_code if not harden else 200,
-                'content_length': len(resp.content) if not harden else None
+                'http_status': resp.status_code,
+                'content_length': len(resp.content)
             }
         })
     except Exception as e:
@@ -1152,14 +963,10 @@ def request_loan(current_user):
         
     except Exception as e:
         print(f"Loan request error: {str(e)}")
-        return format_error_response(
-            e,
-            500,
-            include_debug={
-                'endpoint': 'request_loan',
-                'error_details': str(e)
-            }
-        )
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
 
 # Hidden admin endpoint (security through obscurity)
 @app.route('/sup3r_s3cr3t_admin')
@@ -1264,15 +1071,12 @@ def approve_loan(current_user, loan_id):
     except Exception as e:
         # Vulnerability: Detailed error exposure
         print(f"Loan approval error: {str(e)}")
-        return format_error_response(
-            e,
-            500,
-            include_debug={
-                'endpoint': 'approve_loan',
-                'loan_id': loan_id,
-                'error_details': str(e)
-            }
-        )
+        return jsonify({
+            'status': 'error',
+            'message': 'Failed to approve loan',
+            'error': str(e),
+            'loan_id': loan_id
+        }), 500
 
 # Delete account endpoint
 @app.route('/admin/delete_account/<int:user_id>', methods=['POST'])
@@ -1303,15 +1107,10 @@ def delete_account(current_user, user_id):
         
     except Exception as e:
         print(f"Delete account error: {str(e)}")
-        return format_error_response(
-            e,
-            500,
-            include_debug={
-                'endpoint': 'delete_account',
-                'user_id': user_id,
-                'error_details': str(e)
-            }
-        )
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
 
 # Create admin endpoint
 @app.route('/admin/create_admin', methods=['POST'])
@@ -1325,26 +1124,14 @@ def create_admin(current_user):
         username = data.get('username')
         password = data.get('password')
         account_number = generate_account_number()
-        # Save plaintext version
-        hashing.save_plaintext(data.get('username'), data.get('password'))
-
-        if app.config.get("HASHMODE", 0) in (1, 2, 3, 4):
-            password = hashing.create_hashed_password(data.get('password'))
-
-        if harden:
-            # Fixes SQL injection
-            query = sql_injections.create_admin_hardened()
-            execute_query(query, (username, password, account_number, True),
-                          fetch=False
-            )
-        else:
-            # Vulnerability: SQL injection possible
-            # Vulnerability: No password complexity requirements
-            # Vulnerability: No account number uniqueness check
-            execute_query(
-                f"INSERT INTO users (username, password, account_number, is_admin) VALUES ('{username}', '{password}', '{account_number}', true)",
-                fetch=False
-            )
+        
+        # Vulnerability: SQL injection possible
+        # Vulnerability: No password complexity requirements
+        # Vulnerability: No account number uniqueness check
+        execute_query(
+            f"INSERT INTO users (username, password, account_number, is_admin) VALUES ('{username}', '{password}', '{account_number}', true)",
+            fetch=False
+        )
         
         return jsonify({
             'status': 'success',
@@ -1353,188 +1140,10 @@ def create_admin(current_user):
         
     except Exception as e:
         print(f"Create admin error: {str(e)}")
-        return format_error_response(
-            e,
-            500,
-            include_debug={
-                'endpoint': 'create_admin',
-                'error_details': str(e)
-            }
-        )
-
-@app.route('/api/toggle/harden', methods=['POST'])
-def harden_toggle():
-    global harden, SECURITY_HARDENING_ENABLED
-    harden = not harden
-    SECURITY_HARDENING_ENABLED = harden
-
-    app.config["HARDENED"] = harden
-    rate_limit_storage.clear()
-
-    
-    # Update JWT secret in auth module to match hardened state
-    if harden:
-        # Use env var if it's strong enough, otherwise generate a random one
-        env_secret = os.getenv('JWT_SECRET_KEY', 'secret123')
-        if env_secret == 'secret123' or len(env_secret) < 32:
-            auth.JWT_SECRET = secrets.token_urlsafe(32)
-        else:
-            auth.JWT_SECRET = env_secret
-    else:
-        auth.JWT_SECRET = "secret123"
-    rate_limit_storage.clear()
-
-    return jsonify({
-        'status': 'success',
-        'hardened': harden
-    })
-
-@app.route('/api/toggle/reset', methods=['POST'])
-def reset_toggle():
-
-    try:
-        from database import get_connection
-        conn = get_connection()
-        cur = conn.cursor()
-
-        # Clear existing data
-        cur.execute("DELETE FROM bill_payments")
-        cur.execute("DELETE FROM virtual_cards")
-        cur.execute("DELETE FROM transactions")
-        cur.execute("DELETE FROM users_plaintext")
-        cur.execute("DELETE FROM users")
-
-        # Load and execute seed SQL
-        seed_file = Path(__file__).parent / "seed_data.sql"
-        if seed_file.exists():
-            with open(seed_file, "r", encoding="utf-8") as f:
-                cur.execute(f.read())
-
-        # commit here because hashing.initialize will open a separate connection
-        conn.commit()
-
-        app.config["HASHMODE"] = 0
-        hashing.initialize()
-
-        # to avoid any newly registered users or virtual cards using the same id
-        cur.execute("SELECT setval('users_id_seq', (SELECT MAX(id) FROM users))")
-        cur.execute("SELECT setval('virtual_cards_id_seq', (SELECT MAX(id) FROM virtual_cards))")
-        conn.commit()
-        cur.close()
-        conn.close()
-
-        return jsonify({
-        'status': 'success'
-        })
-
-    except Exception as e:
-        print(f"[reset] failed: {e}")
         return jsonify({
             'status': 'error',
             'message': str(e)
         }), 500
-
-
-@app.route('/api/toggle/hashing', methods=['POST'])
-def hashing_toggle():
-    """
-    Hashing toggle has 5 modes:
-    None - plaintext
-    Weak - SHA-1
-    Medium - SHA-256
-    Strong - Argon2id
-    Various - Uses random hashing techniques from above
-    """
-    currentHash = app.config.get("HASHMODE", 0)
-
-    newHash = (currentHash + 1) % 5
-
-    app.config["HASHMODE"] = newHash
-    # Creates hashed database
-    hashing.create_hashing_db()
-
-    return jsonify({
-        'status': 'success',
-        'hashmode': newHash
-    })
-
-@app.before_first_request
-def setup_hashing():
-    """
-    Adds hashing demo users to User table
-    Creates plaintext table backup (so can go between
-    hashing modes)
-    """
-    hashing.initialize()
-
-@app.route('/api/hashmode', methods=['GET'])
-def get_hashmode():
-    """
-    Retrieves the current hashmode
-    This is to help demo the hashing password mitigation
-    """
-    try:
-        currentHash = app.config.get("HASHMODE", 0)
-        modeName = {
-            0: "None - Plaintext",
-            1: "Weak - SHA-1",
-            2: "Medium - SHA-256",
-            3: "Strong - Argon2id",
-            4: "Various Types"
-        }
-
-        return jsonify({
-            'hashmode': currentHash,
-            'modename': modeName.get(currentHash)
-        })
-
-    except Exception as e:
-        print(f"Can't view hashmode: {str(e)}")
-        return jsonify({
-            'status': 'error',
-            'message': str(e)
-        }), 500
-
-@app.route('/api/hashed-passwords', methods=['GET'])
-def hashed_pass():
-    """
-    Allows the user to view the passwords for the
-    hashing demo
-    """
-    cur = None
-    conn = None
-
-    try:
-        conn = psycopg2.connect(
-        dbname=os.getenv("DB_NAME"),
-        user=os.getenv("DB_USER"),
-        password=os.getenv("DB_PASSWORD"),
-        host=os.getenv("DB_HOST"),
-        port=os.getenv("DB_PORT")
-        )
-
-        cur = conn.cursor()
-
-        cur.execute("""
-            SELECT username, password
-            FROM users
-        """)
-
-        rows = cur.fetchall()
-
-        return jsonify(rows)
-
-    except Exception as e:
-        print(f"Can't view passwords: {str(e)}")
-        return jsonify({
-            'status': 'error',
-            'message': str(e)
-        }), 500
-    finally:
-        if cur:
-            cur.close()
-        if conn:
-            conn.close()
 
 
 # Forgot password endpoint
@@ -1544,18 +1153,12 @@ def forgot_password():
         try:
             data = request.get_json()  # Changed to get_json()
             username = data.get('username')
-
+            
             # Vulnerability: SQL Injection possible
-            if harden:
-                # Fixes SQL injection
-                query = sql_injections.forgot_password_hardened()
-                user = execute_query(query, (username,))
-
-            else:
-                user = execute_query(
-                    f"SELECT id FROM users WHERE username='{username}'"
-                )
-
+            user = execute_query(
+                f"SELECT id FROM users WHERE username='{username}'"
+            )
+            
             if user:
                 # Weak reset pin logic (CWE-330)
                 # Using only 3 digits makes it easily guessable
@@ -1567,16 +1170,11 @@ def forgot_password():
                     (reset_pin, username),
                     fetch=False
                 )
-
+                
                 # Vulnerability: Information disclosure
-                # For demo purposes, the PIN will be exposed here. This
-                # streamlines the demo process so that evaluators can
-                # confirm that the issued PIN works in vulnerable mode.
-                # This is because the focus here is rate limiting and
-                # enacting a mitigation for this vulnerability.
                 return jsonify({
                     'status': 'success',
-                    'message': 'Reset PIN: ' + reset_pin,
+                    'message': 'Reset PIN has been sent to your email.',
                     'debug_info': {  # Vulnerability: Information disclosure
                         'timestamp': str(datetime.now()),
                         'username': username,
@@ -1593,20 +1191,15 @@ def forgot_password():
                 
         except Exception as e:
             print(f"Forgot password error: {str(e)}")
-            return format_error_response(
-                e,
-                500,
-                include_debug={
-                    'endpoint': 'forgot_password',
-                    'error_details': str(e)
-                }
-            )
+            return jsonify({
+                'status': 'error',
+                'message': str(e)
+            }), 500
             
     return render_template('forgot_password.html')
 
 # Reset password endpoint
 @app.route('/reset-password', methods=['GET', 'POST'])
-@ip_rate_limit(prefix="reset_password", limit=5)
 def reset_password():
     if request.method == 'POST':
         try:
@@ -1623,10 +1216,6 @@ def reset_password():
             )
             
             if user:
-                # Save plaintext version
-                hashing.save_plaintext(username, new_password)
-                if app.config.get("HASHMODE", 0) in (1, 2, 3, 4):
-                    new_password = hashing.create_hashed_password(new_password)
                 # Vulnerability: No password complexity requirements
                 # Vulnerability: No password history check
                 execute_query(
@@ -1649,14 +1238,11 @@ def reset_password():
         except Exception as e:
             # Vulnerability: Detailed error exposure
             print(f"Reset password error: {str(e)}")
-            return format_error_response(
-                e,
-                500,
-                include_debug={
-                    'endpoint': 'reset_password',
-                    'error_details': str(e)
-                }
-            )
+            return jsonify({
+                'status': 'error',
+                'message': 'Password reset failed',
+                'error': str(e)
+            }), 500
             
     return render_template('reset_password.html')
 
@@ -1667,15 +1253,10 @@ def api_v1_forgot_password():
         data = request.get_json()
         username = data.get('username')
         
-        if harden:
-            # Fixes SQL injection
-            query = sql_injections.api_v1_forgot_password_hardened()
-            user = execute_query(query, (username,))
-        else:
-            # Vulnerability: SQL Injection possible
-            user = execute_query(
-                f"SELECT id FROM users WHERE username='{username}'"
-            )
+        # Vulnerability: SQL Injection possible
+        user = execute_query(
+            f"SELECT id FROM users WHERE username='{username}'"
+        )
         
         if user:
             # Weak reset pin logic (CWE-330)
@@ -1710,14 +1291,10 @@ def api_v1_forgot_password():
     except Exception as e:
         # Vulnerability: Detailed error exposure
         print(f"Forgot password error: {str(e)}")
-        return format_error_response(
-            e,
-            500,
-            include_debug={
-                'endpoint': 'api_v1_forgot_password',
-                'error_details': str(e)
-            }
-        )
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
 
 # V2 API - Fixes excessive data exposure but still vulnerable to other issues
 @app.route('/api/v2/forgot-password', methods=['POST'])
@@ -1726,15 +1303,10 @@ def api_v2_forgot_password():
         data = request.get_json()
         username = data.get('username')
         
-        if harden:
-            # Fixes SQL injection
-            query = sql_injections.api_v2_forgot_password_hardened()
-            user = execute_query(query, (username,))
-        else:
-            # Vulnerability: SQL Injection still possible
-            user = execute_query(
-                f"SELECT id FROM users WHERE username='{username}'"
-            )
+        # Vulnerability: SQL Injection still possible
+        user = execute_query(
+            f"SELECT id FROM users WHERE username='{username}'"
+        )
         
         if user:
             # Weak reset pin logic (CWE-330) - still using 3 digits
@@ -1767,14 +1339,10 @@ def api_v2_forgot_password():
     except Exception as e:
         # Vulnerability: Detailed error exposure still exists
         print(f"Forgot password error: {str(e)}")
-        return format_error_response(
-            e,
-            500,
-            include_debug={
-                'endpoint': 'unknown_endpoint',
-                'error_details': str(e)
-            }
-        )
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
 
 # V3 API - Uses 4-digit PIN, otherwise similar vulnerabilities
 @app.route('/api/v3/forgot-password', methods=['POST'])
@@ -1782,17 +1350,12 @@ def api_v3_forgot_password():
     try:
         data = request.get_json()
         username = data.get('username')
-
-        if harden:
-            # Fixes SQL injection
-            query = sql_injections.api_v3_forgot_password_hardened()
-            user = execute_query(query, (username,))
-        else:
-            # Vulnerability: SQL Injection still possible
-            user = execute_query(
-                f"SELECT id FROM users WHERE username='{username}'"
-            )
-
+        
+        # Vulnerability: SQL Injection still possible
+        user = execute_query(
+            f"SELECT id FROM users WHERE username='{username}'"
+        )
+        
         if user:
             # Weak reset pin logic (CWE-330) - now 4 digits but still guessable
             reset_pin = str(random.randint(1000, 9999))
@@ -1803,20 +1366,14 @@ def api_v3_forgot_password():
                 (reset_pin, username),
                 fetch=False
             )
-
-            # For demo purposes, the PIN will be exposed here. This
-            # streamlines the demo process so that evaluators can
-            # confirm that the issued PIN works in vulnerable mode.
-            # This is because the focus here is rate limiting and
-            # enacting a mitigation for this vulnerability.
+            
+            # Fixed: No PIN exposure in response
             return jsonify({
                 'status': 'success',
-                'message': 'Reset PIN: ' + reset_pin,
-                'debug_info': {
+                'message': 'Reset PIN has been sent to your email.',
+                'debug_info': {  # Still minor data exposure
                     'timestamp': str(datetime.now()),
-                    'username': username,
-                    'pin_length': len(reset_pin),
-                    'pin': reset_pin
+                    'username': username
                 }
             })
         else:
@@ -1829,18 +1386,13 @@ def api_v3_forgot_password():
     except Exception as e:
         # Vulnerability: Detailed error exposure still exists
         print(f"Forgot password error: {str(e)}")
-        return format_error_response(
-            e,
-            500,
-            include_debug={
-                'endpoint': 'unknown_endpoint',
-                'error_details': str(e)
-            }
-        )
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
 
 # V1 API for reset password
 @app.route('/api/v1/reset-password', methods=['POST'])
-@ip_rate_limit(prefix="api_v1_reset_password", limit=5)
 def api_v1_reset_password():
     try:
         data = request.get_json()
@@ -1856,10 +1408,6 @@ def api_v1_reset_password():
         )
         
         if user:
-            # Save plaintext version
-            hashing.save_plaintext(username, new_password)
-            if app.config.get("HASHMODE", 0) in (1, 2, 3, 4):
-                new_password = hashing.create_hashed_password(new_password)
             # Vulnerability: No password complexity requirements
             # Vulnerability: No password history check
             execute_query(
@@ -1894,18 +1442,14 @@ def api_v1_reset_password():
     except Exception as e:
         # Vulnerability: Detailed error exposure
         print(f"Reset password error: {str(e)}")
-        return format_error_response(
-            e,
-            500,
-            include_debug={
-                'endpoint': 'unknown_endpoint',
-                'error_details': str(e)
-            }
-        )
+        return jsonify({
+            'status': 'error',
+            'message': 'Password reset failed',
+            'error': str(e)
+        }), 500
 
 # V2 API for reset password
 @app.route('/api/v2/reset-password', methods=['POST'])
-@ip_rate_limit(prefix="api_v2_reset_password", limit=5)
 def api_v2_reset_password():
     try:
         data = request.get_json()
@@ -1921,10 +1465,6 @@ def api_v2_reset_password():
         )
         
         if user:
-            # Save plaintext version
-            hashing.save_plaintext(username, new_password)
-            if app.config.get("HASHMODE", 0) in (1, 2, 3, 4):
-                new_password = hashing.create_hashed_password(new_password)
             # Vulnerability: No password complexity requirements
             # Vulnerability: No password history check
             execute_query(
@@ -1950,18 +1490,14 @@ def api_v2_reset_password():
     except Exception as e:
         # Vulnerability: Still exposing error details but less verbose
         print(f"Reset password error: {str(e)}")
-        return format_error_response(
-            e,
-            500,
-            include_debug={
-                'endpoint': 'unknown_endpoint',
-                'error_details': str(e)
-            }
-        )
+        return jsonify({
+            'status': 'error',
+            'message': 'Password reset failed'
+            # Detailed error removed in v2
+        }), 500
 
 # V3 API for reset password - expects 4-digit PIN
 @app.route('/api/v3/reset-password', methods=['POST'])
-@ip_rate_limit(prefix="api_v3_reset_password", limit=5)
 def api_v3_reset_password():
     try:
         data = request.get_json()
@@ -1977,10 +1513,6 @@ def api_v3_reset_password():
         )
         
         if user:
-            # Save plaintext version
-            hashing.save_plaintext(username, new_password)
-            if app.config.get("HASHMODE", 0) in (1, 2, 3, 4):
-                new_password = hashing.create_hashed_password(new_password)
             execute_query(
                 "UPDATE users SET password = %s, reset_pin = NULL WHERE username = %s",
                 (new_password, username),
@@ -1999,14 +1531,10 @@ def api_v3_reset_password():
                 
     except Exception as e:
         print(f"Reset password error: {str(e)}")
-        return format_error_response(
-            e,
-            500,
-            include_debug={
-                'endpoint': 'api_v3_reset_password',
-                'error_details': str(e)
-            }
-        )
+        return jsonify({
+            'status': 'error',
+            'message': 'Password reset failed'
+        }), 500
 
 @app.route('/api/transactions', methods=['GET'])
 @token_required
@@ -2017,21 +1545,16 @@ def api_transactions(current_user):
     if not account_number:
         return jsonify({'error': 'Account number required'}), 400
         
-    if harden:
-        query = sql_injections.api_transactions_hardened()
-        params = (account_number, account_number)
-    else:
-        # Vulnerability: SQL Injection
-        query = f"""
-            SELECT * FROM transactions
-            WHERE from_account='{account_number}' OR to_account='{account_number}'
-            ORDER BY timestamp DESC
-        """
-        params = ()
-
+    # Vulnerability: SQL Injection
+    query = f"""
+        SELECT * FROM transactions 
+        WHERE from_account='{account_number}' OR to_account='{account_number}'
+        ORDER BY timestamp DESC
+    """
+    
     try:
-        transactions = execute_query(query, params)
-
+        transactions = execute_query(query)
+        
         # Convert Decimal objects to float for JSON serialization
         transaction_list = []
         for t in transactions:
@@ -2051,14 +1574,7 @@ def api_transactions(current_user):
         })
         
     except Exception as e:
-        return format_error_response(
-            e,
-            500,
-            include_debug={
-                'endpoint': 'api_transactions',
-                'error_details': str(e)
-            }
-        )
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/virtual-cards/create', methods=['POST'])
 @token_required
@@ -2078,29 +1594,16 @@ def create_virtual_card(current_user):
         # Vulnerability: SQL injection possible in card_type
         card_type = data.get('card_type', 'standard')
         
-        if harden:
-            query = sql_injections.create_virtual_card_hardened()
-            params = (
-                current_user['user_id'],
-                card_number,
-                cvv,
-                expiry_date,
-                card_limit,
-                card_type
-            )
-            result = execute_query(query, params)
-
-        else:
         # Create virtual card
-            query = f"""
-                INSERT INTO virtual_cards
-                (user_id, card_number, cvv, expiry_date, card_limit, card_type)
-                VALUES
-                ({current_user['user_id']}, '{card_number}', '{cvv}', '{expiry_date}', {card_limit}, '{card_type}')
-                RETURNING id
-            """
-            params = ()
-            result = execute_query(query)
+        query = f"""
+            INSERT INTO virtual_cards 
+            (user_id, card_number, cvv, expiry_date, card_limit, card_type)
+            VALUES 
+            ({current_user['user_id']}, '{card_number}', '{cvv}', '{expiry_date}', {card_limit}, '{card_type}')
+            RETURNING id
+        """
+        
+        result = execute_query(query)
         
         if result:
             # Vulnerability: Sensitive data exposure
@@ -2123,14 +1626,10 @@ def create_virtual_card(current_user):
         
     except Exception as e:
         # Vulnerability: Detailed error exposure
-        return format_error_response(
-            e,
-            500,
-            include_debug={
-                'endpoint': 'create_virtual_card',
-                'error_details': str(e)
-            }
-        )
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
 
 @app.route('/api/virtual-cards', methods=['GET'])
 @token_required
@@ -2161,36 +1660,27 @@ def get_virtual_cards(current_user):
                 'card_type': card[11]
             } for card in cards]
         })
-
+        
     except Exception as e:
-        return format_error_response(
-            e,
-            500,
-            include_debug={
-                'endpoint': 'get_virtual_cards',
-                'error_details': str(e)
-            }
-        )
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
 
 @app.route('/api/virtual-cards/<int:card_id>/toggle-freeze', methods=['POST'])
 @token_required
 def toggle_card_freeze(current_user, card_id):
-    # if harden:
-    #     return BOLA.toggle_card_freeze_hardened(current_user, card_id)
     try:
-        if harden:
-            query = BOLA.toggle_card_freeze_hardened()
-            result = execute_query(query, (card_id, current_user['user_id']))
-        else:
-            # Vulnerability: No CSRF protection
-            # Vulnerability: BOLA - no verification if card belongs to user
-            query = f"""
-                UPDATE virtual_cards 
-                SET is_frozen = NOT is_frozen 
-                WHERE id = {card_id}
-                RETURNING is_frozen
-            """
-            result = execute_query(query)
+        # Vulnerability: No CSRF protection
+        # Vulnerability: BOLA - no verification if card belongs to user
+        query = f"""
+            UPDATE virtual_cards 
+            SET is_frozen = NOT is_frozen 
+            WHERE id = {card_id}
+            RETURNING is_frozen
+        """
+        
+        result = execute_query(query)
         
         if result:
             return jsonify({
@@ -2198,51 +1688,33 @@ def toggle_card_freeze(current_user, card_id):
                 'message': f"Card {'frozen' if result[0][0] else 'unfrozen'} successfully"
             })
             
-        # return jsonify({
-        #     'status': 'error',
-        #     'message': 'Card not found'
-        # }), 404
-
         return jsonify({
             'status': 'error',
-            'message': 'Card not found or access denied'
-        }), 403
+            'message': 'Card not found'
+        }), 404
         
     except Exception as e:
-        return format_error_response(
-            e,
-            500,
-            include_debug={
-                'endpoint': 'get_virtual_cards',
-                'error_details': str(e)
-            }
-        )
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
 
 @app.route('/api/virtual-cards/<int:card_id>/transactions', methods=['GET'])
 @token_required
 def get_card_transactions(current_user, card_id):
     try:
-        if harden:
-            query = BOLA.get_card_transactions_hardened()
-            transactions = execute_query(query, (card_id, current_user['user_id']))
-            if not transactions:
-                return jsonify({
-                    'status': 'error',
-                    'message': 'Record empty or access denied.'
-                }), 403
-        else:
-            # Vulnerability: BOLA - no verification if card belongs to user
-            # Vulnerability: SQL Injection possible
-            query = f"""
-                SELECT ct.*, vc.card_number 
-                FROM card_transactions ct
-                JOIN virtual_cards vc ON ct.card_id = vc.id
-                WHERE ct.card_id = {card_id}
-                ORDER BY ct.timestamp DESC
-            """
-
-            transactions = execute_query(query)
-
+        # Vulnerability: BOLA - no verification if card belongs to user
+        # Vulnerability: SQL Injection possible
+        query = f"""
+            SELECT ct.*, vc.card_number 
+            FROM card_transactions ct
+            JOIN virtual_cards vc ON ct.card_id = vc.id
+            WHERE ct.card_id = {card_id}
+            ORDER BY ct.timestamp DESC
+        """
+        
+        transactions = execute_query(query)
+        
         # Vulnerability: Information disclosure
         return jsonify({
             'status': 'success',
@@ -2257,17 +1729,12 @@ def get_card_transactions(current_user, card_id):
                 'card_number': t[8]
             } for t in transactions]
         })
-
+        
     except Exception as e:
-        return format_error_response(
-            e,
-            500,
-            include_debug={
-                'endpoint': 'get_card_transactions',
-                'card_id': card_id,
-                'error_details': str(e)
-            }
-        )
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
 
 @app.route('/api/virtual-cards/<int:card_id>/update-limit', methods=['POST'])
 @token_required
@@ -2279,16 +1746,7 @@ def update_card_limit(current_user, card_id):
         update_fields = []
         update_values = []
         updated_fields_list = []  # Store field names in a regular list
-
-        if harden:
-            try:
-                MA.update_card_limit_hardened(data or {}, ['card_limit'])
-            except ValueError as ve:
-                return jsonify({
-                    'status': 'error',
-                    'message': 'Illegal payload'
-                }), 403
-    
+        
         # Iterate through all fields sent in request
         # Vulnerability: No whitelist of allowed fields
         # This allows updating any column including balance
@@ -2303,19 +1761,15 @@ def update_card_limit(current_user, card_id):
             update_fields.append(f"{key} = %s")
             update_values.append(value)
             updated_fields_list.append(key)  # Add to list instead of dict_keys
-
-        if harden:
-            query = BOLA.update_card_limit_hardened(update_fields)
-            update_values.extend([card_id, current_user['user_id']])
-        else:
-            # Vulnerability: BOLA - no verification if card belongs to user
-            query = f"""
-                UPDATE virtual_cards
-                SET {', '.join(update_fields)}
-                WHERE id = {card_id}
-                RETURNING *
-            """
             
+        # Vulnerability: BOLA - no verification if card belongs to user
+        query = f"""
+            UPDATE virtual_cards 
+            SET {', '.join(update_fields)}
+            WHERE id = {card_id}
+            RETURNING *
+        """
+        
         result = execute_query(query, tuple(update_values))
         
         if result:
@@ -2338,19 +1792,15 @@ def update_card_limit(current_user, card_id):
             
         return jsonify({
             'status': 'error',
-            'message': 'Card not found or access denied'
-        }), 403
+            'message': 'Card not found'
+        }), 404
             
     except Exception as e:
         # Vulnerability: Detailed error exposure
-        return format_error_response(
-            e,
-            500,
-            include_debug={
-                'endpoint': 'unknown_endpoint',
-                'error_details': str(e)
-            }
-        )
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
 
 @app.route('/api/bill-categories', methods=['GET'])
 def get_bill_categories():
@@ -2368,30 +1818,21 @@ def get_bill_categories():
             } for cat in categories]
         })
     except Exception as e:
-        return format_error_response(
-            e,
-            500,
-            include_debug={
-                'endpoint': 'get_bill_categories',
-                'error_details': str(e)
-            }
-        )
+        return jsonify({
+            'status': 'error',
+            'message': str(e)  # Vulnerability: Detailed error exposure
+        }), 500
 
 @app.route('/api/billers/by-category/<int:category_id>', methods=['GET'])
-#@app.route('/api/billers/by-category/<category_id>', methods=['GET']) # Only for testing purposes
 def get_billers_by_category(category_id):
     try:
-        if harden:
-            query = sql_injections.get_billers_by_category_hardened()
-            billers = execute_query(query, (category_id,))
-        else:
-            # Vulnerability: SQL injection possible
-            query = f"""
-                SELECT * FROM billers
-                WHERE category_id = {category_id}
-                AND is_active = TRUE
-            """
-            billers = execute_query(query)
+        # Vulnerability: SQL injection possible
+        query = f"""
+            SELECT * FROM billers 
+            WHERE category_id = {category_id} 
+            AND is_active = TRUE
+        """
+        billers = execute_query(query)
         
         # Vulnerability: Information disclosure
         return jsonify({
@@ -2406,14 +1847,10 @@ def get_billers_by_category(category_id):
             } for b in billers]
         })
     except Exception as e:
-        return format_error_response(
-            e,
-            500,
-            include_debug={
-                'endpoint': 'unknown_endpoint',
-                'error_details': str(e)
-            }
-        )
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
 
 @app.route('/api/bill-payments/create', methods=['POST'])
 @token_required
@@ -2432,24 +1869,14 @@ def create_bill_payment(current_user):
         # Vulnerability: No payment method validation
         
         if payment_method == 'virtual_card' and card_id:
-            if harden:
-                card_query = BOLA.create_bill_payment_hardened()
-                card_result = execute_query(card_query,(card_id, current_user['user_id']))
-                if not card_result:
-                    return jsonify({
-                    'status': 'error',
-                    'message': 'Card not found or access denied'
-                }), 403
-                card = card_result[0]
-            else:
-                # Vulnerability: BOLA - no verification if card belongs to user
-                # Vulnerability: SQL injection possible
-                card_query = f"""
-                    SELECT current_balance, card_limit, is_frozen 
-                    FROM virtual_cards 
-                    WHERE id = {card_id}
-                """
-                card = execute_query(card_query)[0]
+            # Vulnerability: BOLA - no verification if card belongs to user
+            # Vulnerability: SQL injection possible
+            card_query = f"""
+                SELECT current_balance, card_limit, is_frozen 
+                FROM virtual_cards 
+                WHERE id = {card_id}
+            """
+            card = execute_query(card_query)[0]
             
             if card[2]:  # is_frozen
                 return jsonify({
@@ -2536,41 +1963,32 @@ def create_bill_payment(current_user):
         })
         
     except Exception as e:
-        return format_error_response(
-            e,
-            500,
-            include_debug={
-                'endpoint': 'unknown_endpoint',
-                'error_details': str(e)
-            }
-        )
-
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
 
 @app.route('/api/bill-payments/history', methods=['GET'])
 @token_required
 def get_payment_history(current_user):
     try:
         # Vulnerability: No pagination
-        if harden:
-            query = sql_injections.get_payment_history_hardened()
-            payments = execute_query(query, (current_user['user_id'],))
-        else:
-            # Vulnerability: SQL injection possible
-            query = f"""
-                SELECT
-                    bp.*,
-                    b.name as biller_name,
-                    bc.name as category_name,
-                    vc.card_number
-                FROM bill_payments bp
-                JOIN billers b ON bp.biller_id = b.id
-                JOIN bill_categories bc ON b.category_id = bc.id
-                LEFT JOIN virtual_cards vc ON bp.card_id = vc.id
-                WHERE bp.user_id = {current_user['user_id']}
-                ORDER BY bp.created_at DESC
-            """
+        # Vulnerability: SQL injection possible
+        query = f"""
+            SELECT 
+                bp.*,
+                b.name as biller_name,
+                bc.name as category_name,
+                vc.card_number
+            FROM bill_payments bp
+            JOIN billers b ON bp.biller_id = b.id
+            JOIN bill_categories bc ON b.category_id = bc.id
+            LEFT JOIN virtual_cards vc ON bp.card_id = vc.id
+            WHERE bp.user_id = {current_user['user_id']}
+            ORDER BY bp.created_at DESC
+        """
         
-            payments = execute_query(query)
+        payments = execute_query(query)
         
         # Vulnerability: Excessive data exposure
         return jsonify({
@@ -2591,14 +2009,10 @@ def get_payment_history(current_user):
         })
         
     except Exception as e:
-        return format_error_response(
-            e,
-            500,
-            include_debug={
-                'endpoint': 'unknown_endpoint',
-                'error_details': str(e)
-            }
-        )
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
 
 # AI CUSTOMER SUPPORT AGENT ROUTES (INTENTIONALLY VULNERABLE)
 @app.route('/api/ai/chat', methods=['POST'])
@@ -2667,15 +2081,11 @@ def ai_chat_authenticated(current_user):
         
     except Exception as e:
         # VULNERABILITY: Detailed error messages
-        return format_error_response(
-            e,
-            500,
-            include_debug={
-                'endpoint': 'ai_chat_authenticated',
-                'system_info': ai_agent.get_system_info(),
-                'error_details': str(e)
-            }
-        )
+        return jsonify({
+            'status': 'error',
+            'message': f'AI chat error: {str(e)}',
+            'system_info': ai_agent.get_system_info()
+        }), 500
 
 @app.route('/api/ai/chat/anonymous', methods=['POST'])
 @ai_rate_limit
@@ -2710,15 +2120,11 @@ def ai_chat_anonymous():
         })
         
     except Exception as e:
-        return format_error_response(
-            e,
-            500,
-            include_debug={
-                'endpoint': 'ai_chat_anonymous',
-                'system_info': ai_agent.get_system_info(),
-                'error_details': str(e)
-            }
-        )
+        return jsonify({
+            'status': 'error',
+            'message': f'Anonymous AI chat error: {str(e)}',
+            'system_info': ai_agent.get_system_info()
+        }), 500
 
 @app.route('/api/ai/system-info', methods=['GET'])
 @ai_rate_limit
@@ -2754,14 +2160,10 @@ def ai_system_info():
             ]
         })
     except Exception as e:
-        return format_error_response(
-            e,
-            500,
-            include_debug={
-                'endpoint': 'ai_system_info',
-                'error_details': str(e)
-            }
-        )
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
 
 @app.route('/api/ai/rate-limit-status', methods=['GET'])
 def ai_rate_limit_status():
@@ -2829,62 +2231,26 @@ def ai_rate_limit_status():
         return jsonify(status)
         
     except Exception as e:
-        return format_error_response(
-            e,
-            500,
-            include_debug={
-                'endpoint': 'unknown_endpoint',
-                'error_details': str(e)
-            }
-        )
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
 
 @app.route('/api/security-config')
 def security_config():
-    """
-    Endpoint that returns the current state of all vulnerability toggles.
-    Used by the demo interface to display which protections are enabled/disabled.
-    Respects the global 'harden' toggle - when enabled, all protections are shown as active.
-    """
-    # If global harden toggle is enabled, all protections are active
-    if harden:
-        return jsonify({
-            'xss_protection_enabled': True,
-            'security_hardening_enabled': True,
-            'sql_injection_protection': True,
-            'authorization_enabled': True,
-            'information_disclosure_protection': True,
-            'mass_assignment_protection': True,
-            'password_hashing_enabled': True,
-            'file_upload_validation': True,
-            'ai_prompt_injection_protection': True
-        })
-
-    # Otherwise, return the individual environment variable states
     return jsonify({
         'xss_protection_enabled': XSS_PROTECTION_ENABLED,
-        'security_hardening_enabled': SECURITY_HARDENING_ENABLED,
-        'sql_injection_protection': SQL_INJECTION_PROTECTION,
-        'authorization_enabled': AUTHORIZATION_ENABLED,
-        'information_disclosure_protection': INFORMATION_DISCLOSURE_PROTECTION,
-        'mass_assignment_protection': MASS_ASSIGNMENT_PROTECTION,
-        'password_hashing_enabled': PASSWORD_HASHING_ENABLED,
-        'file_upload_validation': FILE_UPLOAD_VALIDATION,
-        'ai_prompt_injection_protection': AI_PROMPT_INJECTION_PROTECTION
+        'security_hardening_enabled': SECURITY_HARDENING_ENABLED
     })
 
 if __name__ == '__main__':
-    if os.getenv("APP_ENV") != "test":
-        init_db()
+    init_connection_pool()
+    init_db()
+    seed_database_on_startup()
     init_auth_routes(app)
 
-    seed_database_on_startup()
+    port = int(os.getenv('PORT', 5000))
 
-    # Debug mode toggle
-    if harden:
-        # Hardened: Debug mode disabled
-        print("Starting Flask app in PRODUCTION mode (debug=False)")
-        app.run(host='0.0.0.0', port=5000, debug=False)
-    else:
-        # Vulnerable: Debug mode enabled in production
-        print("Starting Flask app in DEBUG mode (debug=True) - INSECURE!")
-        app.run(host='0.0.0.0', port=5000, debug=True)
+    # Debug mode toggle (CWE-489)
+    print("Starting Flask app in PRODUCTION mode (debug=False)")
+    app.run(host='0.0.0.0', port=port, debug=False)

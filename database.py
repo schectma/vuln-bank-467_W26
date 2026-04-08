@@ -3,17 +3,34 @@ import psycopg2
 from psycopg2 import pool
 from datetime import datetime
 import time
+from urllib.parse import urlparse
 
 # Vulnerable database configuration
 # CWE-259: Use of Hard-coded Password
 # CWE-798: Use of Hard-coded Credentials
-DB_CONFIG = {
-    'dbname': os.getenv('DB_NAME', 'vulnerable_bank'),
-    'user': os.getenv('DB_USER', 'vuln_user'),
-    'password': os.getenv('DB_PASSWORD', 'vulnbank123'),  # Hardcoded password in default value
-    'host': os.getenv('DB_HOST', 'localhost'),
-    'port': os.getenv('DB_PORT', '5432')
-}
+
+def _get_db_config():
+    db_url = os.getenv('DATABASE_URL')
+    if db_url:
+        parsed = urlparse(db_url)
+        return {
+            'dbname': parsed.path[1:] if parsed.path else 'vulnerable_bank',
+            'user': parsed.username or 'vuln_user',
+            'password': parsed.password or 'vulnbank123',
+            'host': parsed.hostname or 'localhost',
+            'port': parsed.port or 5432,
+        }
+
+    return {
+        'dbname': os.getenv('DB_NAME', 'vulnerable_bank'),
+        'user': os.getenv('DB_USER', 'vuln_user'),
+        'password': os.getenv('DB_PASSWORD', 'vulnbank123'),  # Hardcoded password in default value
+        'host': os.getenv('DB_HOST', 'localhost'),
+        'port': os.getenv('DB_PORT', '5432')
+    }
+
+
+DB_CONFIG = _get_db_config()
 
 # Create a connection pool
 connection_pool = None
