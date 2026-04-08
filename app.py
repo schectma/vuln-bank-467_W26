@@ -143,8 +143,13 @@ def validate_cors_origin():
 
     # Determine same-origin
     if origin:
-        scheme = 'https' if request.is_secure else 'http'
-        same_origin = f"{scheme}://{request.host}"
+        forwarded_proto = request.headers.get('X-Forwarded-Proto', '').split(',')[0].strip()
+        scheme = forwarded_proto if forwarded_proto in ('http', 'https') else ('https' if request.is_secure else 'http')
+
+        forwarded_host = request.headers.get('X-Forwarded-Host', '').split(',')[0].strip()
+        host = forwarded_host or request.host
+
+        same_origin = f"{scheme}://{host}"
         is_same_origin = (origin == same_origin)
     else:
         is_same_origin = True  # No Origin header = same-origin or non-browser request

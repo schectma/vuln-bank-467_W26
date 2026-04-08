@@ -1,4 +1,3 @@
-
 const hashModes = [
     { label: "None",   color: "#b30000" }, // Plaintext
     { label: "Weak",   color: "#ff8c00" }, // Weak
@@ -28,7 +27,7 @@ async function toggleHashing(e) {
             hashMode = data.hashmode;
             updateHashingUI();
         } else {
-            alert(data.message || 'Toggle failed');
+            alert(data.message || data.error || 'Toggle failed');
         }
     } catch (err) {
         console.error(err);
