@@ -3,17 +3,36 @@ import psycopg2
 from psycopg2 import pool
 from datetime import datetime
 import time
+import urllib.parse
 
 # Vulnerable database configuration
 # CWE-259: Use of Hard-coded Password
 # CWE-798: Use of Hard-coded Credentials
-DB_CONFIG = {
-    'dbname': os.getenv('DB_NAME', 'vulnerable_bank'),
-    'user': os.getenv('DB_USER', 'vuln_user'),
-    'password': os.getenv('DB_PASSWORD', 'vulnbank123'),  # Hardcoded password in default value
-    'host': os.getenv('DB_HOST', 'localhost'),
-    'port': os.getenv('DB_PORT', '5432')
-}
+
+def _get_db_config():
+    """Parse DATABASE_URL (set by Railway) or fall back to individual env vars"""
+    app_env = os.getenv('APP_ENV', 'production')
+    database_url = os.getenv('TEST_DATABASE_URL') if app_env == 'test' else os.getenv('DATABASE_URL')
+    
+    if database_url:
+        parsed = urllib.parse.urlparse(database_url)
+        return {
+            'dbname': parsed.path.lstrip('/'),
+            'user': parsed.username,
+            'password': parsed.password,
+            'host': parsed.hostname,
+            'port': parsed.port or 5432
+        }
+    else:
+        return {
+            'dbname': os.getenv('DB_NAME', 'vulnerable_bank'),
+            'user': os.getenv('DB_USER', 'vuln_user'),
+            'password': os.getenv('DB_PASSWORD', 'vulnbank123'),
+            'host': os.getenv('DB_HOST', 'localhost'),
+            'port': os.getenv('DB_PORT', '5432')
+        }
+
+DB_CONFIG = _get_db_config()
 
 # Create a connection pool
 connection_pool = None

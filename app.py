@@ -143,8 +143,13 @@ def validate_cors_origin():
 
     # Determine same-origin
     if origin:
-        scheme = 'https' if request.is_secure else 'http'
-        same_origin = f"{scheme}://{request.host}"
+        forwarded_proto = request.headers.get('X-Forwarded-Proto', '').split(',')[0].strip()
+        scheme = forwarded_proto if forwarded_proto in ('http', 'https') else ('https' if request.is_secure else 'http')
+
+        forwarded_host = request.headers.get('X-Forwarded-Host', '').split(',')[0].strip()
+        host = forwarded_host or request.host
+
+        same_origin = f"{scheme}://{host}"
         is_same_origin = (origin == same_origin)
     else:
         is_same_origin = True  # No Origin header = same-origin or non-browser request
@@ -2873,18 +2878,5 @@ def security_config():
     })
 
 if __name__ == '__main__':
-    if os.getenv("APP_ENV") != "test":
-        init_db()
-    init_auth_routes(app)
-
-    seed_database_on_startup()
-
-    # Debug mode toggle
-    if harden:
-        # Hardened: Debug mode disabled
-        print("Starting Flask app in PRODUCTION mode (debug=False)")
-        app.run(host='0.0.0.0', port=5000, debug=False)
-    else:
-        # Vulnerable: Debug mode enabled in production
-        print("Starting Flask app in DEBUG mode (debug=True) - INSECURE!")
-        app.run(host='0.0.0.0', port=5000, debug=True)
+    port = int(os.getenv('PORT', 8080))
+    app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
