@@ -11,7 +11,6 @@ import urllib.parse
 
 def _get_db_config():
     """Parse DATABASE_URL (set by Railway) or fall back to individual env vars"""
-    # In test mode, prioritize TEST_DATABASE_URL if available
     app_env = os.getenv('APP_ENV', 'production')
     database_url = os.getenv('TEST_DATABASE_URL') if app_env == 'test' else os.getenv('DATABASE_URL')
     
@@ -25,7 +24,6 @@ def _get_db_config():
             'port': parsed.port or 5432
         }
     else:
-        # Fallback to individual env vars
         return {
             'dbname': os.getenv('DB_NAME', 'vulnerable_bank'),
             'user': os.getenv('DB_USER', 'vuln_user'),
