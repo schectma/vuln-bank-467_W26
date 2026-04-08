@@ -12,24 +12,34 @@ import urllib.parse
 def _get_db_config():
     """Parse DATABASE_URL (set by Railway) or fall back to individual env vars"""
     database_url = os.getenv('DATABASE_URL')
+    print(f"[DEBUG] DATABASE_URL present: {bool(database_url)}")  # Add this
+    
     if database_url:
-        parsed = urllib.parse.urlparse(database_url)
-        return {
-            'dbname': parsed.path.lstrip('/'),
-            'user': parsed.username,
-            'password': parsed.password,
-            'host': parsed.hostname,
-            'port': parsed.port or 5432
-        }
+        print(f"[DEBUG] Parsing DATABASE_URL...")  # Add this
+        try:
+            parsed = urllib.parse.urlparse(database_url)
+            config = {
+                'dbname': parsed.path.lstrip('/'),
+                'user': parsed.username,
+                'password': parsed.password,
+                'host': parsed.hostname,
+                'port': parsed.port or 5432
+            }
+            print(f"[DEBUG] Parsed config - host: {config['host']}, port: {config['port']}, dbname: {config['dbname']}")  # Add this
+            return config
+        except Exception as e:
+            print(f"[DEBUG] Failed to parse DATABASE_URL: {e}")  # Add this
     else:
-        # Fallback to individual env vars
-        return {
-            'dbname': os.getenv('DB_NAME', 'vulnerable_bank'),
-            'user': os.getenv('DB_USER', 'vuln_user'),
-            'password': os.getenv('DB_PASSWORD', 'vulnbank123'),
-            'host': os.getenv('DB_HOST', 'localhost'),
-            'port': os.getenv('DB_PORT', '5432')
-        }
+        print(f"[DEBUG] DATABASE_URL not found, using fallback")  # Add this
+    
+    # Fallback to individual env vars
+    return {
+        'dbname': os.getenv('DB_NAME', 'vulnerable_bank'),
+        'user': os.getenv('DB_USER', 'vuln_user'),
+        'password': os.getenv('DB_PASSWORD', 'vulnbank123'),
+        'host': os.getenv('DB_HOST', 'localhost'),
+        'port': os.getenv('DB_PORT', '5432')
+    }
 
 DB_CONFIG = _get_db_config()
 
