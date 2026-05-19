@@ -74,7 +74,7 @@ The upstream Vulnerable Bank application uses:
 
 ## Live Instance
 
-A hosted instance of the application is available for evaluation on [Railway.](vb467w26-production-b2df.up.railway.app)
+A hosted instance of the application is available for evaluation on [Railway.](https://vb467w26-production-b2df.up.railway.app/)
 
 ## Getting Started
 
